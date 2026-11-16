@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production builds
+dist/
+dist-ssr/
+
+# Netlify & Archives
+.netlify/
+tradex-netlify-build.zip
+*.zip
+
+# Environment & Local Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Android & Gradle Build Artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/local.properties
+android/.cxx/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+*.log
+.claude/
+_recovered_from_websites_root/
