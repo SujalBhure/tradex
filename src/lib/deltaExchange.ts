@@ -209,18 +209,34 @@ class DeltaExchangeService {
   }
 
   // Delta Exchange India Server Clock Drift Calibration
-  // Enforces millisecond-accurate time synchronization to beat Delta's strict 5-second replay window
-  public async calibrateServerTime(): Promise<number> {
-    if (Date.now() - this.lastOffsetCalibrationTime < 60000 && this.lastOffsetCalibrationTime > 0) {
+  // Enforces millisecond-accurate time synchronization to beat Delta's strict 5-second replay window.
+  // Fetches live atomic timestamp from Delta's public ticker body which is 100% immune to browser CORS header masking.
+  public async calibrateServerTime(force = false): Promise<number> {
+    if (!force && Date.now() - this.lastOffsetCalibrationTime < 60000 && this.lastOffsetCalibrationTime > 0) {
       return this.serverTimeOffsetSec;
     }
     try {
       const t0 = Date.now();
-      const res = await fetch(`${DELTA_BASE_URL}/v2/products`, { cache: 'no-store' });
+      const res = await fetch(`${DELTA_BASE_URL}/v2/tickers/BTCUSD?_t=${Date.now()}`, { cache: 'no-store' });
       const t1 = Date.now();
+      const rtt = t1 - t0;
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.result && json.result.timestamp) {
+          // json.result.timestamp is in microseconds (16 digits)
+          const serverTimeSec = Math.floor(json.result.timestamp / 1000000);
+          const localTimeSec = Math.floor((t0 + rtt / 2) / 1000);
+          this.serverTimeOffsetSec = serverTimeSec - localTimeSec;
+          this.lastOffsetCalibrationTime = Date.now();
+          return this.serverTimeOffsetSec;
+        }
+      }
+
+      // Fallback: Date header if available (non-browser or permissive proxy)
       const dateHeader = res.headers.get('date');
       if (dateHeader) {
-        const serverDateMs = new Date(dateHeader).getTime() + Math.round((t1 - t0) / 2);
+        const serverDateMs = new Date(dateHeader).getTime() + Math.round(rtt / 2);
         this.serverTimeOffsetSec = Math.round((serverDateMs - Date.now()) / 1000);
         this.lastOffsetCalibrationTime = Date.now();
       }
@@ -246,7 +262,7 @@ class DeltaExchangeService {
       throw new Error('Delta Exchange India API Key & Secret are not configured on this device.');
     }
 
-    if (Date.now() - this.lastOffsetCalibrationTime > 300000 || this.lastOffsetCalibrationTime === 0) {
+    if (Date.now() - this.lastOffsetCalibrationTime > 180000 || this.lastOffsetCalibrationTime === 0) {
       await this.calibrateServerTime();
     }
 
@@ -291,8 +307,9 @@ class DeltaExchangeService {
 
     if (!res.ok) {
       let errMsg = `Delta Exchange HTTP ${res.status}`;
+      let errJson: any = null;
       try {
-        const errJson = await res.json();
+        errJson = await res.json();
         if (errJson.error?.message) {
           errMsg = errJson.error.message;
         } else if (errJson.error?.code) {
@@ -310,11 +327,26 @@ class DeltaExchangeService {
         }
       }
 
-      // Auto-recalibrate clock drift on 408 / request_expired and retry once
+      // Auto-recalibrate clock drift on expired_signature / 408 / request_expired and retry once
       const lower = errMsg.toLowerCase();
-      if (!isRetry && (res.status === 408 || lower.includes('allowed time window') || lower.includes('request_expired'))) {
-        this.lastOffsetCalibrationTime = 0;
-        await this.calibrateServerTime();
+      const errCode = errJson?.error?.code ? String(errJson.error.code).toLowerCase() : '';
+      const isExpiredSignature =
+        res.status === 408 ||
+        errCode === 'expired_signature' ||
+        lower.includes('expired_signature') ||
+        lower.includes('allowed time window') ||
+        lower.includes('request_expired');
+
+      if (!isRetry && isExpiredSignature) {
+        // Delta Exchange India provides the exact atomic server_time in error.context!
+        if (errJson?.error?.context?.server_time) {
+          const serverSec = Number(errJson.error.context.server_time);
+          this.serverTimeOffsetSec = serverSec - Math.floor(Date.now() / 1000);
+          this.lastOffsetCalibrationTime = Date.now();
+        } else {
+          this.lastOffsetCalibrationTime = 0;
+          await this.calibrateServerTime(true);
+        }
         return this.signedFetch<T>(method, path, queryParams, bodyPayload, true);
       }
 
@@ -557,6 +589,7 @@ class DeltaExchangeService {
     capitalInfo?: DeltaCapitalInfo;
   }> {
     try {
+      await this.calibrateServerTime(true);
       await this.loadProducts();
       const [balances, transactions] = await Promise.all([
         this.getWalletBalances(),
@@ -1115,6 +1148,7 @@ class DeltaExchangeService {
 
     this.isSyncing = true;
     try {
+      await this.calibrateServerTime(true);
       await this.loadProducts();
 
       // Fetch positions, open orders (for SL/TP), historical fills, closed orders, balances, and wallet transactions
@@ -1248,9 +1282,18 @@ class DeltaExchangeService {
               this.triggerDebouncedSync(100);
             } else {
               console.warn('Delta WebSocket key-auth rejected:', data);
-              if (data.status_code === 408 || data.status === 'request_expired') {
-                this.lastOffsetCalibrationTime = 0;
-                await this.calibrateServerTime();
+              if (
+                data.status_code === 408 ||
+                data.status === 'request_expired' ||
+                data.error?.code === 'expired_signature'
+              ) {
+                if (data.error?.context?.server_time) {
+                  this.serverTimeOffsetSec = Number(data.error.context.server_time) - Math.floor(Date.now() / 1000);
+                  this.lastOffsetCalibrationTime = Date.now();
+                } else {
+                  this.lastOffsetCalibrationTime = 0;
+                  await this.calibrateServerTime(true);
+                }
               }
             }
             return;
