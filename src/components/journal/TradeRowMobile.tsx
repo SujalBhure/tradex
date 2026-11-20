@@ -2,13 +2,14 @@ import React, { useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDown, MoreVertical, Edit, Trash2, XCircle, TrendingUp, TrendingDown, Image as ImageIcon } from 'lucide-react';
-import { Trade } from '../../types/trading';
+import { Trade, TradingSetup } from '../../types/trading';
 import { formatCurrency, formatPercentage } from '../../utils/tradingCalculations';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
 import { clsx } from 'clsx';
 import { CryptoIcon } from '../ui/CryptoIcon';
 import { CustomCheckbox } from '../ui/CustomCheckbox';
 import { GlassCard } from '../ui/GlassCard';
+import { SetupBadge } from './SetupBadge';
 
 interface TradeRowMobileProps {
   trade: Trade;
@@ -17,9 +18,24 @@ interface TradeRowMobileProps {
   onClose: (trade: Trade) => void;
   isSelected: boolean;
   onSelect: (tradeId: string) => void;
+  setups?: TradingSetup[];
+  onUpdateTradeSetup?: (tradeId: string, setup: string) => void;
+  onOpenManageSetups?: () => void;
+  onAddNewSetup?: (name: string) => TradingSetup;
 }
 
-export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({ trade, onEdit, onDelete, onClose, isSelected, onSelect }) => {
+export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({
+  trade,
+  onEdit,
+  onDelete,
+  onClose,
+  isSelected,
+  onSelect,
+  setups,
+  onUpdateTradeSetup,
+  onOpenManageSetups,
+  onAddNewSetup,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isWin = trade.status === 'closed' && (trade.netPnl || 0) > 0;
@@ -134,6 +150,19 @@ export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({ trade, onEdit, o
               </Transition>
             </Menu>
         </div>
+      </div>
+
+      {/* Setup Row */}
+      <div className="flex items-center justify-between py-2 px-1 mb-3 border-y border-white/5">
+        <span className="text-xs text-text-muted font-medium">Trading Setup</span>
+        <SetupBadge
+          currentSetup={trade.setup}
+          setups={setups || []}
+          onSelectSetup={(newSetup) => onUpdateTradeSetup?.(trade.id, newSetup)}
+          onOpenManageSetups={onOpenManageSetups}
+          onAddNewSetup={onAddNewSetup}
+          size="sm"
+        />
       </div>
 
       {/* Middle Section */}

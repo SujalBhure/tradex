@@ -8,7 +8,7 @@ import { FormInput } from '../ui/FormInput';
 import { CustomSelect } from '../ui/CustomSelect';
 import { CryptoSelect } from '../ui/CryptoSelect';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Trade } from '../../types/trading';
+import { Trade, TradingSetup } from '../../types/trading';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
 import { MarketType, getSymbolsForMarket } from '../../utils/market';
 import {
@@ -27,6 +27,8 @@ interface AddTradeModalProps {
   onClose: () => void;
   onAddTrade: (trade: Omit<Trade, 'id' | 'tradeGroupId'>) => void;
   market: MarketType;
+  setups?: TradingSetup[];
+  onAddNewSetup?: (name: string) => TradingSetup;
 }
 
 type TradeFormData = {
@@ -57,9 +59,12 @@ export const AddTradeModal: React.FC<AddTradeModalProps> = ({
   onClose,
   onAddTrade,
   market,
+  setups,
+  onAddNewSetup,
 }) => {
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState('');
+  const [selectedSetup, setSelectedSetup] = useState('');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [includeFees, setIncludeFees] = useState(true);
   const [feePercent, setFeePercent] = useState(DEFAULT_FEE_PERCENT.toString());
@@ -242,6 +247,7 @@ const onSubmit = async (data: TradeFormData) => {
       closedAt: exitPriceNum ? new Date().toISOString() : undefined,
       notes: notes || undefined,
       screenshotUrl,
+      setup: selectedSetup.trim() || undefined,
     };
 
     if (tradeData.status === 'closed' && tradeData.exitPrice) {
@@ -255,6 +261,7 @@ const onSubmit = async (data: TradeFormData) => {
     
     reset();
     setNotes('');
+    setSelectedSetup('');
     setScreenshotFile(null);
     setIncludeFees(true);
     setFeePercent(DEFAULT_FEE_PERCENT.toString());
@@ -422,6 +429,32 @@ const onSubmit = async (data: TradeFormData) => {
                       <CurrencyDisplay value={Math.abs(positionDetails.potentialLoss)} className="text-danger font-medium justify-end" inrContainerClassName="flex-col items-end"/>
                     </div>
                   </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-text-secondary">Trading Setup</label>
+                    {selectedSetup && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSetup('')}
+                        className="text-xs text-rose-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={selectedSetup}
+                    onChange={(e) => setSelectedSetup(e.target.value)}
+                    className="w-full p-2.5 bg-background border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Select a setup (Optional)</option>
+                    {(setups || []).map((s) => (
+                      <option key={s.id || s.name} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Notes</label>

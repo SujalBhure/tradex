@@ -7,13 +7,14 @@ import { WelcomeModal } from './components/auth/WelcomeModal';
 import { AuthLayout } from './components/auth/AuthLayout';
 import { TradingCapitalCard } from './components/dashboard/TradingCapitalCard';
 import { MetricsGrid } from './components/dashboard/MetricsGrid';
+import { SetupExpectancyTracker } from './components/dashboard/SetupExpectancyTracker';
 
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { TradingCapitalCardSkeleton } from './components/ui/TradingCapitalCardSkeleton';
 import { MetricsGridSkeleton } from './components/ui/MetricsGridSkeleton';
 import { ChartSkeleton } from './components/ui/ChartSkeleton';
-import { Trade, TradingMetrics, JournalFilterStatus } from './types/trading';
+import { Trade, TradingMetrics, JournalFilterStatus, TradingSetup } from './types/trading';
 import {
   LOT_SIZES,
   calculateRiskRewardRatio,
@@ -75,6 +76,9 @@ const DeleteConfirmationModal = React.lazy(() =>
 const ResetJournalModal = React.lazy(() =>
   import('./components/modals/ResetJournalModal').then((m) => ({ default: m.ResetJournalModal }))
 );
+const ManageSetupsModal = React.lazy(() =>
+  import('./components/modals/ManageSetupsModal').then((m) => ({ default: m.ManageSetupsModal }))
+);
 const EXCHANGE_RATE_STORAGE_KEY = 'tradex_usd_to_inr_rate';
 
 
@@ -114,6 +118,8 @@ function App() {
   const [isDeltaConfigured, setIsDeltaConfigured] = useState(() => deltaExchange.isConfigured());
   const [modalState, setModalState] = useState({ add: false, edit: false, close: false, delete: false, resetJournal: false });
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+  const [tradingSetups, setTradingSetups] = useState<TradingSetup[]>(() => localData.getTradingSetups());
+  const [isManageSetupsModalOpen, setIsManageSetupsModalOpen] = useState(false);
 
   const handleDeltaTradesUpdated = useCallback(async (
     updatedTrades: Trade[],
@@ -668,6 +674,56 @@ function App() {
     toast.success('Trade updated successfully!');
   }, [userId]);
 
+  const handleSaveTradingSetups = useCallback((newSetups: TradingSetup[]) => {
+    setTradingSetups(newSetups);
+    localData.saveTradingSetups(newSetups);
+    toast.success('Trading setups updated!');
+  }, []);
+
+  const handleAddNewSetup = useCallback((name: string) => {
+    const created = localData.addTradingSetup(name);
+    setTradingSetups(localData.getTradingSetups());
+    toast.success(`Created setup: ${created.name}`);
+    return created;
+  }, []);
+
+  const handleUpdateTradeSetup = useCallback(async (tradeId: string, setup: string) => {
+    const normalizedSetup = setup ? setup.trim() : undefined;
+
+    setTrades((prev) =>
+      prev.map((t) => (t.id === tradeId ? { ...t, setup: normalizedSetup } : t))
+    );
+
+    if (userId) {
+      try {
+        const currentTrades = localData.getLocalTrades(userId);
+        const updatedLocal = currentTrades.map((t) =>
+          t.id === tradeId ? { ...t, setup: normalizedSetup } : t
+        );
+        localData.saveLocalTrades(userId, updatedLocal);
+      } catch (e) {
+        console.warn('Failed to save trade setup locally:', e);
+      }
+    }
+
+    if (userId && userId !== DEMO_USER_ID && supabase) {
+      const targetTrade = trades.find((t) => t.id === tradeId);
+      if (targetTrade) {
+        try {
+          const tradeWithSetup: Trade = { ...targetTrade, setup: normalizedSetup };
+          await supabaseDataService.saveTrade(tradeWithSetup, userId);
+        } catch (err: any) {
+          console.warn('Supabase trade setup update error:', err);
+        }
+      }
+    }
+
+    toast.success(normalizedSetup ? `Setup tagged: ${normalizedSetup}` : 'Setup unassigned', {
+      id: `setup-toast-${tradeId}`,
+      duration: 2500,
+    });
+  }, [userId, trades]);
+
   const handleDeleteTrade = useCallback(async (tradeId: string) => {
     if (!userId) return;
     const tradeToDelete = trades.find(t => t.id === tradeId) || (selectedTrade?.id === tradeId ? selectedTrade : null);
@@ -1164,6 +1220,15 @@ function App() {
                     totalPnL={metrics.totalPnL}
                   />
                   <MetricsGrid metrics={metrics} />
+                  <SetupExpectancyTracker
+                    trades={dashboardTrades}
+                    customSetups={tradingSetups}
+                    onOpenManageSetups={() => setIsManageSetupsModalOpen(true)}
+                    onNavigateToJournal={() => {
+                      setActiveTab('journal');
+                      setJournalSubTab('trades');
+                    }}
+                  />
                   <Suspense fallback={<ChartSkeleton />}>
                     <PerformanceCharts trades={dashboardTrades} initialCapital={tradingCapital} />
                   </Suspense>
@@ -1256,6 +1321,10 @@ function App() {
                     onAddTradeClick={() => openModal('add')}
                     onResetJournalClick={() => openModal('resetJournal')}
                     onOpenDeltaSync={() => setIsDeltaModalOpen(true)}
+                    setups={tradingSetups}
+                    onUpdateTradeSetup={handleUpdateTradeSetup}
+                    onOpenManageSetups={() => setIsManageSetupsModalOpen(true)}
+                    onAddNewSetup={handleAddNewSetup}
                   />
                 </Suspense>
               ) : (
@@ -1380,12 +1449,22 @@ function App() {
             onClose={() => closeModal('add')}
             onAddTrade={handleAddTrade}
             market={marketMode}
+            setups={tradingSetups}
+            onAddNewSetup={handleAddNewSetup}
           />
 
           <ResetJournalModal
             isOpen={modalState.resetJournal}
             onClose={() => closeModal('resetJournal')}
             onConfirmReset={handleResetJournal}
+          />
+
+          <ManageSetupsModal
+            isOpen={isManageSetupsModalOpen}
+            onClose={() => setIsManageSetupsModalOpen(false)}
+            setups={tradingSetups}
+            trades={trades}
+            onSaveSetups={handleSaveTradingSetups}
           />
         </Suspense>
 
@@ -1397,6 +1476,7 @@ function App() {
               onUpdateTrade={handleUpdateTrade}
               trade={selectedTrade}
               market={marketMode}
+              setups={tradingSetups}
             />
             <CloseTradeModal
               isOpen={modalState.close}

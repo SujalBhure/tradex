@@ -57,6 +57,7 @@ export function mapRowToTrade(row: any): Trade {
   // Extract preserved original string ID and group ID if stored
   let originalId = row.id;
   let originalGroupId = row.trade_group_id || row.id;
+  let setupFromTag: string | undefined = undefined;
   const cleanTags: string[] = [];
 
   for (const tag of rawTags) {
@@ -65,11 +66,15 @@ export function mapRowToTrade(row: any): Trade {
         originalId = tag.substring('__orig_id:'.length);
       } else if (tag.startsWith('__orig_group:')) {
         originalGroupId = tag.substring('__orig_group:'.length);
+      } else if (tag.startsWith('__setup:')) {
+        setupFromTag = tag.substring('__setup:'.length);
       } else {
         cleanTags.push(tag);
       }
     }
   }
+
+  const resolvedSetup = (typeof row.setup === 'string' && row.setup.trim()) ? row.setup.trim() : setupFromTag;
 
   return {
     id: originalId,
@@ -97,6 +102,7 @@ export function mapRowToTrade(row: any): Trade {
     target: row.target !== null && row.target !== undefined ? Number(row.target) : undefined,
     riskRewardRatio: row.risk_reward_ratio !== null && row.risk_reward_ratio !== undefined ? Number(row.risk_reward_ratio) : undefined,
     screenshotUrl: row.screenshot_url || undefined,
+    setup: resolvedSetup || undefined,
   };
 }
 
@@ -112,6 +118,9 @@ export function mapTradeToRow(trade: Trade, userId: string): any {
   }
   if (rawGroupId !== dbGroupId) {
     tags.push(`__orig_group:${rawGroupId}`);
+  }
+  if (trade.setup && trade.setup.trim()) {
+    tags.push(`__setup:${trade.setup.trim()}`);
   }
 
   return {

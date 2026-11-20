@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trade, JournalFilterStatus } from '../../types/trading';
+import { Trade, JournalFilterStatus, TradingSetup } from '../../types/trading';
 import { TradeRow, GroupPosition } from './TradeRow';
 import { TradeHistoryToolbar } from './TradeHistoryToolbar';
 import { CustomCheckbox } from '../ui/CustomCheckbox';
@@ -22,6 +22,10 @@ interface TradeHistoryTableProps {
   onAddTradeClick: () => void;
   onResetJournalClick: () => void;
   onOpenDeltaSync?: () => void;
+  setups?: TradingSetup[];
+  onUpdateTradeSetup?: (tradeId: string, setup: string) => void;
+  onOpenManageSetups?: () => void;
+  onAddNewSetup?: (name: string) => TradingSetup;
 }
 
 export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ 
@@ -40,6 +44,10 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   onAddTradeClick,
   onResetJournalClick,
   onOpenDeltaSync,
+  setups,
+  onUpdateTradeSetup,
+  onOpenManageSetups,
+  onAddNewSetup,
 }) => {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
@@ -100,6 +108,7 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
   const headers = [
     'Symbol',
     'Side',
+    'Setup',
     'Size',
     'Entry Price',
     'Exit Price',
@@ -130,6 +139,8 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
         onAddTradeClick={onAddTradeClick}
         onResetJournalClick={onResetJournalClick}
         onOpenDeltaSync={onOpenDeltaSync}
+        setups={setups}
+        onOpenManageSetups={onOpenManageSetups}
       />
       
       {/* Desktop Table View */}
@@ -193,6 +204,10 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   isSelected={selectedTradeIds.has(trade.id)}
                   onSelect={handleSelectRow}
                   groupPosition={groupPosition}
+                  setups={setups}
+                  onUpdateTradeSetup={onUpdateTradeSetup}
+                  onOpenManageSetups={onOpenManageSetups}
+                  onAddNewSetup={onAddNewSetup}
                 />
               );
             })}
@@ -211,6 +226,10 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
             onClose={onClose}
             isSelected={selectedTradeIds.has(trade.id)}
             onSelect={handleSelectRow}
+            setups={setups}
+            onUpdateTradeSetup={onUpdateTradeSetup}
+            onOpenManageSetups={onOpenManageSetups}
+            onAddNewSetup={onAddNewSetup}
           />
         ))}
       </div>

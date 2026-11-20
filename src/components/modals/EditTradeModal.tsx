@@ -7,7 +7,7 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { FormInput } from '../ui/FormInput';
 import { CustomSelect } from '../ui/CustomSelect';
 import { CryptoSelect } from '../ui/CryptoSelect';
-import { Trade } from '../../types/trading';
+import { Trade, TradingSetup } from '../../types/trading';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
 import { MarketType, getSymbolsForMarket } from '../../utils/market';
 import {
@@ -27,6 +27,7 @@ interface EditTradeModalProps {
   onUpdateTrade: (trade: Trade) => void;
   trade: Trade;
   market: MarketType;
+  setups?: TradingSetup[];
 }
 
 type TradeFormData = {
@@ -57,9 +58,11 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
   onUpdateTrade,
   trade,
   market,
+  setups,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [notes, setNotes] = useState(trade.notes || '');
+  const [notes, setNotes] = useState(trade?.notes || '');
+  const [selectedSetup, setSelectedSetup] = useState<string>(trade?.setup || '');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [currentScreenshotUrl, setCurrentScreenshotUrl] = useState<string | undefined>(trade.screenshotUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +124,7 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
         exitPrice: trade.exitPrice ? String(trade.exitPrice) : '',
       });
       setNotes(trade.notes || '');
+      setSelectedSetup(trade.setup || '');
       setCurrentScreenshotUrl(trade.screenshotUrl);
       setScreenshotFile(null);
     }
@@ -258,6 +262,7 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
         notes: notes || undefined,
         fees: fees,
         screenshotUrl: finalScreenshotUrl,
+        setup: selectedSetup.trim() || undefined,
       };
 
       if (updatedTrade.status === 'closed' && updatedTrade.exitPrice) {
@@ -410,6 +415,32 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
                       <CurrencyDisplay value={Math.abs(positionDetails.potentialLoss)} className="text-danger font-medium justify-end" inrContainerClassName="flex-col items-end" />
                     </div>
                   </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-text-secondary">Trading Setup</label>
+                    {selectedSetup && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSetup('')}
+                        className="text-xs text-rose-400 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={selectedSetup}
+                    onChange={(e) => setSelectedSetup(e.target.value)}
+                    className="w-full p-2.5 bg-background border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Select a setup (Optional)</option>
+                    {(setups || []).map((s) => (
+                      <option key={s.id || s.name} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Notes</label>

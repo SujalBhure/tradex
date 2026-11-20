@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Calendar, Trash2, X, PlusCircle, FileDown, RotateCcw, Upload, Zap } from 'lucide-react';
-import { JournalFilterStatus, Trade } from '../../types/trading';
+import { Filter, Calendar, Trash2, X, PlusCircle, FileDown, RotateCcw, Upload, Zap, Layers } from 'lucide-react';
+import { JournalFilterStatus, Trade, TradingSetup } from '../../types/trading';
 import { formatCurrency, formatPercentage } from '../../utils/tradingCalculations';
 
 interface TradeHistoryToolbarProps {
@@ -18,6 +18,8 @@ interface TradeHistoryToolbarProps {
   onOpenDeltaSync?: () => void;
   sortOrder?: 'newest' | 'oldest';
   setSortOrder?: (order: 'newest' | 'oldest') => void;
+  setups?: TradingSetup[];
+  onOpenManageSetups?: () => void;
 }
 
 interface DateInputProps {
@@ -71,6 +73,8 @@ export const TradeHistoryToolbar: React.FC<TradeHistoryToolbarProps> = ({
   onOpenDeltaSync,
   sortOrder,
   setSortOrder,
+  setups,
+  onOpenManageSetups,
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -98,6 +102,7 @@ export const TradeHistoryToolbar: React.FC<TradeHistoryToolbarProps> = ({
       const dataToExport = trades.map(trade => ({
         'Symbol': trade.symbol,
         'Side': trade.side,
+        'Setup': trade.setup || 'Unassigned',
         'Status': trade.status,
         'Lots': trade.lots.toFixed(4),
         'Quantity': trade.quantity.toFixed(4),
@@ -292,6 +297,18 @@ export const TradeHistoryToolbar: React.FC<TradeHistoryToolbarProps> = ({
             >
               <Zap className="w-4 h-4 text-cyan-400" />
               <span className="text-xs sm:text-sm">Delta Sync</span>
+            </motion.button>
+          )}
+          {onOpenManageSetups && (
+            <motion.button
+              onClick={onOpenManageSetups}
+              className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold py-2 px-3 sm:px-4 rounded-xl transition-all duration-200 flex items-center justify-center space-x-1.5"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              title="Manage Trading Setups"
+            >
+              <Layers className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs sm:text-sm">Setups</span>
             </motion.button>
           )}
           <motion.button

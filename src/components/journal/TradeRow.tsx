@@ -2,12 +2,13 @@ import React, { useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDown, MoreVertical, Edit, Trash2, XCircle, TrendingUp, TrendingDown, Image as ImageIcon } from 'lucide-react';
-import { Trade } from '../../types/trading';
+import { Trade, TradingSetup } from '../../types/trading';
 import { formatCurrency, formatPercentage } from '../../utils/tradingCalculations';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
 import { clsx } from 'clsx';
 import { CryptoIcon } from '../ui/CryptoIcon';
 import { CustomCheckbox } from '../ui/CustomCheckbox';
+import { SetupBadge } from './SetupBadge';
 
 export type GroupPosition = 'start' | 'middle' | 'end' | 'single';
 
@@ -19,9 +20,25 @@ interface TradeRowProps {
   isSelected: boolean;
   onSelect: (tradeId: string) => void;
   groupPosition: GroupPosition;
+  setups?: TradingSetup[];
+  onUpdateTradeSetup?: (tradeId: string, setup: string) => void;
+  onOpenManageSetups?: () => void;
+  onAddNewSetup?: (name: string) => TradingSetup;
 }
 
-export const TradeRow: React.FC<TradeRowProps> = ({ trade, onEdit, onDelete, onClose, isSelected, onSelect, groupPosition }) => {
+export const TradeRow: React.FC<TradeRowProps> = ({
+  trade,
+  onEdit,
+  onDelete,
+  onClose,
+  isSelected,
+  onSelect,
+  groupPosition,
+  setups,
+  onUpdateTradeSetup,
+  onOpenManageSetups,
+  onAddNewSetup,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isWin = trade.status === 'closed' && (trade.netPnl || 0) > 0;
@@ -92,6 +109,15 @@ export const TradeRow: React.FC<TradeRowProps> = ({ trade, onEdit, onDelete, onC
             {trade.side === 'long' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
             <span>{(trade.side || 'N/A').toUpperCase()}</span>
           </div>
+        </td>
+        <td className="px-3 lg:px-5 py-3.5 lg:py-4 whitespace-nowrap">
+          <SetupBadge
+            currentSetup={trade.setup}
+            setups={setups || []}
+            onSelectSetup={(newSetup) => onUpdateTradeSetup?.(trade.id, newSetup)}
+            onOpenManageSetups={onOpenManageSetups}
+            onAddNewSetup={onAddNewSetup}
+          />
         </td>
         <td className="px-3 lg:px-5 py-3.5 lg:py-4 cursor-pointer whitespace-nowrap" onClick={() => setIsExpanded(!isExpanded)}>
           <div className="font-medium text-sm sm:text-base">{(trade.lots ?? 0).toFixed(4)}</div>
@@ -198,7 +224,7 @@ export const TradeRow: React.FC<TradeRowProps> = ({ trade, onEdit, onDelete, onC
       <AnimatePresence>
         {isExpanded && (
           <tr>
-            <td colSpan={12} className="p-0">
+            <td colSpan={13} className="p-0">
               <motion.div
                 className="overflow-hidden"
                 initial={{ maxHeight: 0, opacity: 0 }}

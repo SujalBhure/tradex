@@ -1,5 +1,6 @@
-import { Trade } from '../types/trading';
+import { Trade, TradingSetup } from '../types/trading';
 import { TradingNote, SelfJournalEntry, KnowledgeItem } from '../types/aiJournal';
+import { DEFAULT_TRADING_SETUPS, SETUP_PALETTE_COLORS } from '../utils/setupCalculations';
 
 export interface AuthUser {
   id: string;
@@ -162,6 +163,53 @@ class LocalStorageService {
   public async saveUserData(userId: string, data: { trades?: Trade[]; capital?: number }): Promise<void> {
     if (data.trades) this.saveLocalTrades(userId, data.trades);
     if (data.capital !== undefined) this.saveLocalCapital(userId, data.capital);
+  }
+
+  public getTradingSetups(): TradingSetup[] {
+    try {
+      const data = localStorage.getItem('tradex_trading_setups');
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error reading trading setups from localStorage:', e);
+    }
+    return DEFAULT_TRADING_SETUPS;
+  }
+
+  public saveTradingSetups(setups: TradingSetup[]): void {
+    try {
+      localStorage.setItem('tradex_trading_setups', JSON.stringify(setups));
+    } catch (e) {
+      console.warn('Error saving trading setups to localStorage:', e);
+    }
+  }
+
+  public addTradingSetup(name: string, color?: string, description?: string): TradingSetup {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Setup name cannot be empty');
+    const existing = this.getTradingSetups();
+    const found = existing.find((s) => s.name.toLowerCase() === trimmed.toLowerCase());
+    if (found) return found;
+
+    const assignedColor = color || SETUP_PALETTE_COLORS[existing.length % SETUP_PALETTE_COLORS.length];
+    const newSetup: TradingSetup = {
+      id: `setup_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: trimmed,
+      color: assignedColor,
+      description,
+    };
+
+    const updated = [...existing, newSetup];
+    this.saveTradingSetups(updated);
+    return newSetup;
+  }
+
+  public deleteTradingSetup(id: string): void {
+    const existing = this.getTradingSetups();
+    const updated = existing.filter((s) => s.id !== id && s.name.toLowerCase() !== id.toLowerCase());
+    this.saveTradingSetups(updated);
   }
 }
 

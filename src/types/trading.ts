@@ -23,6 +23,38 @@ export interface Trade {
   target?: number;
   riskRewardRatio?: number;
   screenshotUrl?: string;
+  setup?: string;
+}
+
+export interface TradingSetup {
+  id: string;
+  name: string;
+  color: string;
+  description?: string;
+}
+
+export interface SetupExpectancyMetric {
+  setup: string;
+  color: string;
+  totalTrades: number;
+  closedTrades: number;
+  openTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  breakEvenTrades: number;
+  winRate: number; // 0 to 100
+  lossRate: number; // 0 to 100
+  winRateDecimal: number; // 0.00 to 1.00
+  lossRateDecimal: number; // 0.00 to 1.00
+  avgWin: number;
+  avgLoss: number;
+  expectancy: number; // Formula: (winRateDecimal * avgWin) - (lossRateDecimal * avgLoss)
+  expectancyRatio: number; // expectancy / avgLoss
+  totalPnL: number;
+  profitFactor: number;
+  grossProfit: number;
+  grossLoss: number;
+  edge: 'strong_positive' | 'positive' | 'neutral' | 'negative';
 }
 
 export interface TradingMetrics {
