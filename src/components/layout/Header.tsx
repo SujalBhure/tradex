@@ -72,6 +72,19 @@ export const Header: React.FC<HeaderProps> = ({
     await onUpdateExchangeRate(parsed);
   };
 
+  const handleLogoClick = () => {
+    onTabChange('dashboard');
+    try {
+      if (window.location.hash || window.location.search) {
+        window.location.href = window.location.origin + window.location.pathname;
+      } else {
+        window.location.reload();
+      }
+    } catch {
+      window.location.reload();
+    }
+  };
+
   return (
     <header className="sticky top-4 z-50 px-4 sm:px-6 lg:px-8">
       <motion.div
@@ -81,11 +94,22 @@ export const Header: React.FC<HeaderProps> = ({
         transition={{ duration: 0.5 }}
       >
         <motion.div
-          className="flex items-center space-x-3 cursor-pointer select-none"
+          onClick={handleLogoClick}
+          className="flex items-center space-x-3 cursor-pointer select-none group"
           whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           transition={{ duration: 0.2 }}
+          role="button"
+          tabIndex={0}
+          title="Refresh and go to Dashboard"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleLogoClick();
+            }
+          }}
         >
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0 shadow-md shadow-primary/20">
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0 shadow-md shadow-primary/20 group-hover:shadow-primary/40 group-hover:brightness-110 transition-all">
             <BookOpen className="w-5 h-5 text-black" />
           </div>
           <div className="hidden sm:flex items-center">
@@ -94,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
               animateOn="hover"
               speed={35}
               maxIterations={6}
-              className="text-xl font-extrabold text-text-primary leading-tight tracking-tight"
+              className="text-xl font-extrabold text-text-primary leading-tight tracking-tight group-hover:text-primary transition-colors"
               encryptedClassName="text-xl font-extrabold text-primary font-mono tracking-tight"
             />
           </div>
