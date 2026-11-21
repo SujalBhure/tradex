@@ -10,7 +10,7 @@ interface SetupBadgeProps {
   setups: TradingSetup[];
   onSelectSetup: (setupName: string) => void;
   onOpenManageSetups?: () => void;
-  onAddNewSetup?: (name: string) => TradingSetup;
+  onAddNewSetup?: (name: string) => any;
   size?: 'sm' | 'md';
   disabled?: boolean;
 }
@@ -97,11 +97,14 @@ export const SetupBadge: React.FC<SetupBadgeProps> = ({
     const name = newSetupName.trim();
     if (!name) return;
     if (onAddNewSetup) {
-      const created = onAddNewSetup(name);
-      onSelectSetup(created.name);
-    } else {
-      onSelectSetup(name);
+      try {
+        const res = onAddNewSetup(name);
+        if (res && typeof res.then === 'function') {
+          res.catch(() => {});
+        }
+      } catch {}
     }
+    onSelectSetup(name);
     setNewSetupName('');
     setIsOpen(false);
   };

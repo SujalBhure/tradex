@@ -1,5 +1,6 @@
 import { Trade } from '../types/trading';
 import { secureStorage, StoredDeltaCredentials } from './secureStorage';
+import { localStorageService } from './localStorageService';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 
@@ -1119,14 +1120,31 @@ class DeltaExchangeService {
       }
     }
 
-    // Safety pass: strictly preserve all user setups from existingTrades
-    const existingSetups = new Map<string, string>();
-    existingTrades.forEach((t) => {
-      if (t.setup) existingSetups.set(t.id, t.setup);
+    // Safety pass: strictly preserve all user setups from existingTrades, group anchors, and persistent setup map
+    const persistentMap = localStorageService.getTradeSetupsMap(userId);
+    const existingSetups = new Map<string, string>(Object.entries(persistentMap));
+    const existingSetupsByGroup = new Map<string, string>();
+
+    Object.entries(persistentMap).forEach(([k, v]) => {
+      if (k.startsWith('delta_group_') || k.startsWith('delta_pos_')) {
+        existingSetupsByGroup.set(k, v);
+      }
     });
+
+    existingTrades.forEach((t) => {
+      if (t.setup) {
+        existingSetups.set(t.id, t.setup);
+        if (t.tradeGroupId) existingSetupsByGroup.set(t.tradeGroupId, t.setup);
+      }
+    });
+
     for (const [id, trade] of existingTradeMap.entries()) {
-      if (!trade.setup && existingSetups.has(id)) {
-        trade.setup = existingSetups.get(id);
+      if (!trade.setup) {
+        if (existingSetups.has(id)) {
+          trade.setup = existingSetups.get(id);
+        } else if (trade.tradeGroupId && existingSetupsByGroup.has(trade.tradeGroupId)) {
+          trade.setup = existingSetupsByGroup.get(trade.tradeGroupId);
+        }
       }
     }
 
@@ -1167,6 +1185,15 @@ class DeltaExchangeService {
 
     this.isSyncing = true;
     try {
+      // If passed existingTrades is empty, check localStorage as recovery fallback
+      let candidateTrades = existingTrades;
+      if (candidateTrades.length === 0 && userId) {
+        const cached = localStorageService.getLocalTrades(userId);
+        if (cached && cached.length > 0) {
+          candidateTrades = cached;
+        }
+      }
+
       await this.calibrateServerTime(true);
       await this.loadProducts();
 
@@ -1185,7 +1212,7 @@ class DeltaExchangeService {
         closedOrders,
         positions,
         openOrders,
-        existingTrades,
+        candidateTrades,
         userId
       );
 

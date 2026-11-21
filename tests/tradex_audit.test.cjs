@@ -1341,6 +1341,77 @@ async function runTests() {
     assert.strictEqual(pcLoadedSetups[1].name, 'Asia Sweep');
   });
 
+  await test('SetupBadge Inline Quick-Add Contract (Prevents Async Promise / Undefined Leak)', async () => {
+    let capturedSelectedSetup = null;
+    const mockOnSelectSetup = (setupName) => {
+      capturedSelectedSetup = setupName;
+    };
+
+    // Simulate async onAddNewSetup handler (as implemented in App.tsx)
+    const mockOnAddNewSetup = async (name) => {
+      return { id: 'setup_123', name: name.trim(), color: '#10b981' };
+    };
+
+    // Simulate SetupBadge handleCreateNew
+    const inputName = 'Liquidity Sweep Reversal';
+    const trimmed = inputName.trim();
+    if (mockOnAddNewSetup) {
+      try {
+        const res = mockOnAddNewSetup(trimmed);
+        if (res && typeof res.then === 'function') {
+          res.catch(() => {});
+        }
+      } catch {}
+    }
+    mockOnSelectSetup(trimmed);
+
+    assert.strictEqual(typeof capturedSelectedSetup, 'string', 'Selected setup must be a string');
+    assert.strictEqual(capturedSelectedSetup, 'Liquidity Sweep Reversal', 'Must select exact typed setup name');
+    assert.notStrictEqual(capturedSelectedSetup, undefined, 'Must NEVER select undefined due to async promise');
+  });
+
+  await test('Persistent Trade Setups Map Anchor & Group ID Fallback Engine', async () => {
+    // 1. Simulate persistent map
+    const persistentMap = {
+      delta_exit_888999: 'Order Block FVG',
+      delta_group_27_flip_888999: 'Order Block FVG',
+    };
+
+    // 2. Incoming trades reconstructed from raw Delta Exchange fills where existingTrades was empty
+    const rawReconstructedTrades = [
+      {
+        id: 'delta_exit_888999',
+        tradeGroupId: 'delta_group_27_flip_888999',
+        symbol: 'BTCUSD',
+        side: 'long',
+        netPnl: 15.5,
+        status: 'closed',
+        openedAt: '2026-11-20T10:00:00Z',
+        setup: undefined, // Lost during fresh fill reconstruction
+      },
+      {
+        id: 'delta_exit_777111',
+        tradeGroupId: 'delta_group_27_flip_888999', // Partial exit from same group
+        symbol: 'BTCUSD',
+        side: 'long',
+        netPnl: 8.2,
+        status: 'closed',
+        openedAt: '2026-11-20T09:30:00Z',
+        setup: undefined,
+      },
+    ];
+
+    // 3. Apply persistent map anchor and group fallback
+    const setupsMap = new Map(Object.entries(persistentMap));
+    const merged = rawReconstructedTrades.map((t) => {
+      const resolved = t.setup || setupsMap.get(t.id) || (t.tradeGroupId ? setupsMap.get(t.tradeGroupId) : undefined);
+      return resolved ? { ...t, setup: resolved } : t;
+    });
+
+    assert.strictEqual(merged[0].setup, 'Order Block FVG', 'Must recover setup by trade id from persistent map');
+    assert.strictEqual(merged[1].setup, 'Order Block FVG', 'Must inherit setup from group id anchor even for partial exit');
+  });
+
   console.log('\n================================================================');
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');

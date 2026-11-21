@@ -474,8 +474,14 @@ export const syncTradingNotesWithCloud = async (userId: string): Promise<Trading
 
     if (error) throw error;
 
-    const localNotes = getTradingNotes();
-    const cloudMap = new Map((cloudNotes || []).map((n) => [n.id, n]));
+    const userCloudNotes = (cloudNotes || []).filter(
+      (n) => n.category !== 'system_config' && !n.title.startsWith('__tradex_')
+    );
+
+    const localNotes = getTradingNotes().filter(
+      (n) => n.category !== 'system_config' && !n.title.startsWith('__tradex_')
+    );
+    const cloudMap = new Map(userCloudNotes.map((n) => [n.id, n]));
 
     // Upload local notes that are not in cloud yet
     for (const local of localNotes) {
@@ -496,8 +502,8 @@ export const syncTradingNotesWithCloud = async (userId: string): Promise<Trading
       }
     }
 
-    if (cloudNotes && cloudNotes.length > 0) {
-      const merged: TradingNote[] = cloudNotes.map((n) => ({
+    if (userCloudNotes && userCloudNotes.length > 0) {
+      const merged: TradingNote[] = userCloudNotes.map((n) => ({
         id: n.id,
         title: n.title,
         category: n.category as any,

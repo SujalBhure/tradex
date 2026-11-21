@@ -12,7 +12,7 @@
  */
 
 import { supabase } from './supabase';
-import { Trade } from '../types/trading';
+import { Trade, TradingSetup } from '../types/trading';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -112,7 +112,9 @@ export function mapTradeToRow(trade: Trade, userId: string): any {
   const rawGroupId = trade.tradeGroupId || trade.id;
   const dbGroupId = toValidUuid(rawGroupId);
 
-  const tags = Array.isArray(trade.tags) ? [...trade.tags] : [];
+  const tags = (Array.isArray(trade.tags) ? trade.tags : []).filter(
+    (t) => typeof t === 'string' && !t.startsWith('__orig_id:') && !t.startsWith('__orig_group:') && !t.startsWith('__setup:')
+  );
   if (trade.id !== dbId) {
     tags.push(`__orig_id:${trade.id}`);
   }
@@ -318,6 +320,112 @@ export const supabaseDataService = {
 
     // Reset capital to 0
     await this.saveUserCapital(0, userId);
+  },
+
+  /**
+   * Fetch custom trading setups from cloud.
+   * Multi-layered: checks database table first, falls back to auth metadata.
+   */
+  async fetchTradingSetups(userId: string): Promise<TradingSetup[] | null> {
+    if (!supabase || !userId) return null;
+    try {
+      // 1. Fetch from database configuration row
+      const { data, error } = await supabase
+        .from('trading_notes')
+        .select('content')
+        .eq('user_id', userId)
+        .eq('title', '__tradex_trading_setups__')
+        .maybeSingle();
+
+      if (!error && data?.content) {
+        const parsed = JSON.parse(data.content);
+        if (Array.isArray(parsed)) return parsed;
+      }
+
+      // 2. Fallback to auth user metadata
+      const { data: authData } = await supabase.auth.getUser();
+      if (Array.isArray(authData?.user?.user_metadata?.trading_setups)) {
+        return authData.user.user_metadata.trading_setups;
+      }
+    } catch (e) {
+      console.warn('Error fetching trading setups from cloud:', e);
+    }
+    return null;
+  },
+
+  /**
+   * Persist custom trading setups to cloud across database and user metadata.
+   */
+  async saveTradingSetups(setups: TradingSetup[], userId: string): Promise<void> {
+    if (!supabase || !userId) return;
+    try {
+      // 1. Save to dedicated configuration row in trading_notes
+      await supabase.from('trading_notes').upsert({
+        id: '00000000-0000-4000-a000-000000000099',
+        user_id: userId,
+        title: '__tradex_trading_setups__',
+        category: 'system_config',
+        content: JSON.stringify(setups),
+        tags: ['__system__'],
+        is_pinned: false,
+        date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+      // 2. Also sync to auth user_metadata
+      await supabase.auth.updateUser({
+        data: { trading_setups: setups },
+      });
+    } catch (e) {
+      console.warn('Error saving trading setups to cloud:', e);
+    }
+  },
+
+  /**
+   * Fetch persistent trade-to-setup map from cloud.
+   */
+  async fetchTradeSetupsMap(userId: string): Promise<Record<string, string>> {
+    if (!supabase || !userId) return {};
+    try {
+      const { data, error } = await supabase
+        .from('trading_notes')
+        .select('content')
+        .eq('user_id', userId)
+        .eq('title', '__tradex_trade_setups_map__')
+        .maybeSingle();
+
+      if (!error && data?.content) {
+        const parsed = JSON.parse(data.content);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.warn('Error fetching trade setups map from cloud:', e);
+    }
+    return {};
+  },
+
+  /**
+   * Save persistent trade-to-setup map to cloud.
+   */
+  async saveTradeSetupsMap(map: Record<string, string>, userId: string): Promise<void> {
+    if (!supabase || !userId) return;
+    try {
+      await supabase.from('trading_notes').upsert({
+        id: '00000000-0000-4000-a000-000000000098',
+        user_id: userId,
+        title: '__tradex_trade_setups_map__',
+        category: 'system_config',
+        content: JSON.stringify(map),
+        tags: ['__system__'],
+        is_pinned: false,
+        date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Error saving trade setups map to cloud:', e);
+    }
   },
 };
 

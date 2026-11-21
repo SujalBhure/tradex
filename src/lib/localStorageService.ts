@@ -211,6 +211,51 @@ class LocalStorageService {
     const updated = existing.filter((s) => s.id !== id && s.name.toLowerCase() !== id.toLowerCase());
     this.saveTradingSetups(updated);
   }
+
+  // --- PERSISTENT TRADE-TO-SETUP MAPPINGS ---
+  // Guaranteed anchor to preserve assigned setups even across full sync resets and raw fill reconstructions
+  public getTradeSetupsMap(userId?: string): Record<string, string> {
+    try {
+      const key = `tradex_trade_setups_map_${userId || 'default'}`;
+      const data = localStorage.getItem(key);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.warn('Error reading trade setups map from localStorage:', e);
+    }
+    return {};
+  }
+
+  public saveTradeSetupMapping(tradeId: string, setup?: string, groupId?: string, userId?: string): void {
+    try {
+      const key = `tradex_trade_setups_map_${userId || 'default'}`;
+      const current = this.getTradeSetupsMap(userId);
+      if (setup && setup.trim()) {
+        const val = setup.trim();
+        current[tradeId] = val;
+        if (groupId) current[groupId] = val;
+      } else {
+        delete current[tradeId];
+        if (groupId) delete current[groupId];
+      }
+      localStorage.setItem(key, JSON.stringify(current));
+    } catch (e) {
+      console.warn('Error saving trade setup mapping to localStorage:', e);
+    }
+  }
+
+  public batchSaveTradeSetupMappings(mappings: Record<string, string>, userId?: string): void {
+    try {
+      const key = `tradex_trade_setups_map_${userId || 'default'}`;
+      const current = this.getTradeSetupsMap(userId);
+      const merged = { ...current, ...mappings };
+      localStorage.setItem(key, JSON.stringify(merged));
+    } catch (e) {
+      console.warn('Error batch saving trade setup mappings to localStorage:', e);
+    }
+  }
 }
 
 export const localStorageService = new LocalStorageService();

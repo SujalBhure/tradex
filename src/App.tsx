@@ -126,22 +126,35 @@ function App() {
     capitalInfo?: DeltaCapitalInfo,
     deletedTradeIds?: string[]
   ) => {
-    // 1. Merge and preserve all user-assigned setups
-    const setupsMap = new Map<string, string>();
+    // 1. Merge and preserve all user-assigned setups from ALL sources:
+    // a. persistent setup map (rock-solid primary anchor)
+    // b. tradesRef.current (in-memory state)
+    // c. local trades cache
+    const persistentMap = userId ? localData.getTradeSetupsMap(userId) : {};
+    const setupsMap = new Map<string, string>(Object.entries(persistentMap));
+
     tradesRef.current.forEach((t) => {
-      if (t.setup) setupsMap.set(t.id, t.setup);
+      if (t.setup) {
+        setupsMap.set(t.id, t.setup);
+        if (t.tradeGroupId) setupsMap.set(t.tradeGroupId, t.setup);
+      }
     });
+
     if (userId) {
       try {
         localData.getLocalTrades(userId).forEach((t) => {
-          if (t.setup && !setupsMap.has(t.id)) setupsMap.set(t.id, t.setup);
+          if (t.setup) {
+            if (!setupsMap.has(t.id)) setupsMap.set(t.id, t.setup);
+            if (t.tradeGroupId && !setupsMap.has(t.tradeGroupId)) setupsMap.set(t.tradeGroupId, t.setup);
+          }
         });
       } catch {}
     }
 
     const mergedTrades = updatedTrades.map((t) => {
-      if (!t.setup && setupsMap.has(t.id)) {
-        return { ...t, setup: setupsMap.get(t.id) };
+      const resolved = t.setup || setupsMap.get(t.id) || (t.tradeGroupId ? setupsMap.get(t.tradeGroupId) : undefined);
+      if (resolved && t.setup !== resolved) {
+        return { ...t, setup: resolved };
       }
       return t;
     });
@@ -207,6 +220,8 @@ function App() {
   // Real-Time WebSocket Streaming & Immediate Auto-Sync from Delta Exchange India
   useEffect(() => {
     setIsDeltaConfigured(deltaExchange.isConfigured());
+    if (!sessionChecked) return;
+
     deltaExchange.startAutoSync(
       () => tradesRef.current,
       (newTrades, capitalInfo, deletedTradeIds) => {
@@ -230,7 +245,7 @@ function App() {
       }
     );
     return () => deltaExchange.stopAutoSync();
-  }, [handleDeltaTradesUpdated]);
+  }, [handleDeltaTradesUpdated, sessionChecked]);
 
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<JournalFilterStatus>('all');
@@ -260,22 +275,35 @@ function App() {
       // 2. Real Authenticated User: Load from Supabase first
       if (supabase) {
         try {
-          const [cloudTrades, cloudCapital] = await Promise.all([
-            supabaseDataService.fetchUserTrades(currentUserId),
-            supabaseDataService.fetchUserCapital(currentUserId),
-          ]);
-
-          // Sync custom setups from Supabase user_metadata across devices
+          // Sync custom setups & persistent trade setups map from cloud across devices
           try {
-            const { data: authData } = await supabase.auth.getUser();
-            if (authData?.user?.user_metadata?.trading_setups && Array.isArray(authData.user.user_metadata.trading_setups)) {
-              const cloudSetups = authData.user.user_metadata.trading_setups as TradingSetup[];
+            const [cloudSetups, cloudSetupMap] = await Promise.all([
+              supabaseDataService.fetchTradingSetups(currentUserId),
+              supabaseDataService.fetchTradeSetupsMap(currentUserId),
+            ]);
+
+            if (cloudSetups !== null) {
               setTradingSetups(cloudSetups);
               localData.saveTradingSetups(cloudSetups);
+            }
+            if (cloudSetupMap && Object.keys(cloudSetupMap).length > 0) {
+              localData.batchSaveTradeSetupMappings(cloudSetupMap, currentUserId);
             }
           } catch (setupErr) {
             console.warn('Setups cloud sync warning:', setupErr);
           }
+
+          const [rawCloudTrades, cloudCapital] = await Promise.all([
+            supabaseDataService.fetchUserTrades(currentUserId),
+            supabaseDataService.fetchUserCapital(currentUserId),
+          ]);
+
+          // Enrich cloud trades with the persistent setup mapping so setups never disappear
+          const persistentMap = localData.getTradeSetupsMap(currentUserId);
+          const cloudTrades = rawCloudTrades.map((t) => {
+            const resolved = t.setup || persistentMap[t.id] || (t.tradeGroupId ? persistentMap[t.tradeGroupId] : undefined);
+            return resolved ? { ...t, setup: resolved } : t;
+          });
 
           // Automatically purge legacy phantom zero-price / duplicate Delta bracket orders from DB
           const phantomIds = cloudTrades
@@ -488,6 +516,58 @@ function App() {
       setRealtimeStatus('offline');
     }
   }, [isAuthenticated, userId, sessionChecked, loadAndPrepareUserData]);
+
+  // Cross-device sync: reload setups and setups mapping when tab/app regains focus or visibility
+  useEffect(() => {
+    if (!userId || userId === DEMO_USER_ID) return;
+
+    const syncCrossDevice = async () => {
+      try {
+        const [cloudSetups, cloudSetupMap] = await Promise.all([
+          supabaseDataService.fetchTradingSetups(userId),
+          supabaseDataService.fetchTradeSetupsMap(userId),
+        ]);
+
+        if (cloudSetups !== null) {
+          setTradingSetups(cloudSetups);
+          localData.saveTradingSetups(cloudSetups);
+        }
+        if (cloudSetupMap && Object.keys(cloudSetupMap).length > 0) {
+          localData.batchSaveTradeSetupMappings(cloudSetupMap, userId);
+          setTrades((prev) => {
+            let changed = false;
+            const updated = prev.map((t) => {
+              const mapped = cloudSetupMap[t.id] || (t.tradeGroupId ? cloudSetupMap[t.tradeGroupId] : undefined);
+              if (mapped && t.setup !== mapped) {
+                changed = true;
+                return { ...t, setup: mapped };
+              }
+              return t;
+            });
+            if (changed) {
+              tradesRef.current = updated;
+              return updated;
+            }
+            return prev;
+          });
+        }
+      } catch {}
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncCrossDevice();
+      }
+    };
+
+    window.addEventListener('focus', syncCrossDevice);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', syncCrossDevice);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [userId]);
 
   const forceScrollTop = useCallback(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -723,32 +803,22 @@ function App() {
     setTradingSetups(newSetups);
     localData.saveTradingSetups(newSetups);
 
-    // Sync to Supabase user_metadata so all devices (Mobile APK, PC Web) share the exact same custom setups
-    if (userId && userId !== DEMO_USER_ID && supabase) {
-      try {
-        await supabase.auth.updateUser({
-          data: { trading_setups: newSetups }
-        });
-      } catch (err) {
-        console.warn('Failed to sync trading setups to cloud metadata:', err);
-      }
+    // Sync to Supabase so all devices (Mobile APK, PC Web) share the exact same custom setups
+    if (userId && userId !== DEMO_USER_ID) {
+      await supabaseDataService.saveTradingSetups(newSetups, userId);
     }
     toast.success('Trading setups updated!');
   }, [userId]);
 
   const handleAddNewSetup = useCallback(async (name: string) => {
-    const created = localData.addTradingSetup(name);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const created = localData.addTradingSetup(trimmed);
     const updated = localData.getTradingSetups();
     setTradingSetups(updated);
 
-    if (userId && userId !== DEMO_USER_ID && supabase) {
-      try {
-        await supabase.auth.updateUser({
-          data: { trading_setups: updated }
-        });
-      } catch (err) {
-        console.warn('Failed to sync new setup to cloud metadata:', err);
-      }
+    if (userId && userId !== DEMO_USER_ID) {
+      supabaseDataService.saveTradingSetups(updated, userId).catch(() => {});
     }
 
     toast.success(`Created setup: ${created.name}`);
@@ -756,7 +826,7 @@ function App() {
   }, [userId]);
 
   const handleUpdateTradeSetup = useCallback(async (tradeId: string, setup: string) => {
-    const normalizedSetup = setup ? setup.trim() : undefined;
+    const normalizedSetup = setup && setup.trim() ? setup.trim() : undefined;
 
     // 1. Immediately update UI state & synchronously update tradesRef
     setTrades((prev) => {
@@ -765,7 +835,13 @@ function App() {
       return updated;
     });
 
-    // 2. Persist to local cache immediately
+    const targetTrade =
+      tradesRef.current.find((t) => t.id === tradeId) ||
+      (userId ? localData.getLocalTrades(userId).find((t) => t.id === tradeId) : undefined);
+
+    const groupId = targetTrade?.tradeGroupId;
+
+    // 2. Persist to local cache immediately AND persistent setup map
     if (userId) {
       try {
         const currentTrades = localData.getLocalTrades(userId);
@@ -773,6 +849,7 @@ function App() {
           t.id === tradeId ? { ...t, setup: normalizedSetup } : t
         );
         localData.saveLocalTrades(userId, updatedLocal);
+        localData.saveTradeSetupMapping(tradeId, normalizedSetup, groupId, userId);
       } catch (e) {
         console.warn('Failed to save trade setup locally:', e);
       }
@@ -780,14 +857,14 @@ function App() {
 
     // 3. Persist to Supabase cloud immediately
     if (userId && userId !== DEMO_USER_ID && supabase) {
-      const targetTrade =
-        tradesRef.current.find((t) => t.id === tradeId) ||
-        (userId ? localData.getLocalTrades(userId).find((t) => t.id === tradeId) : undefined);
-
       if (targetTrade) {
         try {
           const tradeWithSetup: Trade = { ...targetTrade, setup: normalizedSetup };
           await supabaseDataService.saveTrade(tradeWithSetup, userId);
+
+          // Also update the persistent cloud setup map
+          const currentMap = localData.getTradeSetupsMap(userId);
+          supabaseDataService.saveTradeSetupsMap(currentMap, userId).catch(() => {});
         } catch (err: any) {
           console.error('Supabase trade setup update error:', err);
           toast.error('Failed to sync setup tag to cloud');
