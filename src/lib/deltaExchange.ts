@@ -852,7 +852,14 @@ class DeltaExchangeService {
             tags: ['Delta Exchange', isPartial ? 'Partial Exit' : 'Full Exit'],
           };
 
+          const groupSetup = Array.from(existingTradeMap.values()).find(
+            (t) => t.tradeGroupId === currentGroupId && t.setup
+          )?.setup;
+
           if (!existing) {
+            if (groupSetup) {
+              exitTrade.setup = groupSetup;
+            }
             existingTradeMap.set(exitTradeId, exitTrade);
             newCount++;
           } else {
@@ -866,6 +873,7 @@ class DeltaExchangeService {
               ...exitTrade,
               notes: preservedNotes,
               tags: exitTrade.tags,
+              setup: existing.setup || groupSetup,
             });
             updatedCount++;
           }
@@ -1108,6 +1116,17 @@ class DeltaExchangeService {
           if (!deletedTradeIds.includes(id)) deletedTradeIds.push(id);
           updatedCount++;
         }
+      }
+    }
+
+    // Safety pass: strictly preserve all user setups from existingTrades
+    const existingSetups = new Map<string, string>();
+    existingTrades.forEach((t) => {
+      if (t.setup) existingSetups.set(t.id, t.setup);
+    });
+    for (const [id, trade] of existingTradeMap.entries()) {
+      if (!trade.setup && existingSetups.has(id)) {
+        trade.setup = existingSetups.get(id);
       }
     }
 

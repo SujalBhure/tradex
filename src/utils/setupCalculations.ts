@@ -72,7 +72,13 @@ export function calculateSetupExpectancy(
     };
   }
 
-  // Group trades by setup name (trimmed, case-preserved)
+  // Map normalized lowercase name to canonical setup name from custom setups
+  const canonicalMap = new Map<string, string>();
+  for (const s of customSetups) {
+    canonicalMap.set(s.name.trim().toLowerCase(), s.name.trim());
+  }
+
+  // Group trades by setup name (trimmed, canonicalized against user setups)
   const groups = new Map<string, Trade[]>();
   let totalCategorizedTrades = 0;
   let totalUntaggedTrades = 0;
@@ -81,9 +87,11 @@ export function calculateSetupExpectancy(
     const rawSetup = trade.setup?.trim();
     if (rawSetup) {
       totalCategorizedTrades++;
-      const current = groups.get(rawSetup) || [];
+      const lower = rawSetup.toLowerCase();
+      const canonicalName = canonicalMap.get(lower) || rawSetup;
+      const current = groups.get(canonicalName) || [];
       current.push(trade);
-      groups.set(rawSetup, current);
+      groups.set(canonicalName, current);
     } else {
       totalUntaggedTrades++;
       const current = groups.get('Unassigned') || [];
@@ -92,11 +100,11 @@ export function calculateSetupExpectancy(
     }
   }
 
-  // Also ensure any configured custom setups with 0 trades are present in the list
+  // Also ensure all configured custom setups (even with 0 trades) are present in the list
   // so the user sees all their created setups ready to be traded
   for (const setup of customSetups) {
-    if (!groups.has(setup.name)) {
-      groups.set(setup.name, []);
+    if (!groups.has(setup.name.trim())) {
+      groups.set(setup.name.trim(), []);
     }
   }
 

@@ -1,6 +1,5 @@
 node_modules
 android
-*.apk
 dist
 .git
 .netlify

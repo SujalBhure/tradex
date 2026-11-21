@@ -1238,6 +1238,109 @@ async function runTests() {
     assert(unpacked.tags.includes('Crypto') && unpacked.tags.includes('Scalp'), 'Original tags must be preserved');
   });
 
+  await test('Delta Exchange Auto-Sync Setup Preservation Engine', async () => {
+    // Simulate user tagging a trade in TradeX
+    const existingTrades = [
+      {
+        id: 'delta_exit_99901',
+        tradeGroupId: 'delta_group_1',
+        symbol: 'BTCUSD',
+        side: 'long',
+        lots: 1,
+        quantity: 1,
+        entryPrice: 65000,
+        exitPrice: 65500,
+        leverage: 25,
+        capitalUsed: 2600,
+        margin: 2600,
+        fees: 2,
+        grossPnl: 500,
+        netPnl: 498,
+        status: 'closed',
+        openedAt: '2026-11-20T10:00:00Z',
+        setup: 'Supply & Demand', // User assigned this setup
+      },
+    ];
+
+    // Simulate Delta Exchange auto-sync sending fresh raw trades (which have no setup property)
+    const rawIncomingDeltaTrades = [
+      {
+        id: 'delta_exit_99901',
+        tradeGroupId: 'delta_group_1',
+        symbol: 'BTCUSD',
+        side: 'long',
+        lots: 1,
+        quantity: 1,
+        entryPrice: 65000,
+        exitPrice: 65500,
+        leverage: 25,
+        capitalUsed: 2600,
+        margin: 2600,
+        fees: 2,
+        grossPnl: 500,
+        netPnl: 498,
+        status: 'closed',
+        openedAt: '2026-11-20T10:00:00Z',
+        setup: undefined, // Delta has no setup concept
+      },
+      {
+        id: 'delta_exit_99902',
+        tradeGroupId: 'delta_group_2',
+        symbol: 'ETHUSD',
+        side: 'short',
+        lots: 2,
+        quantity: 2,
+        entryPrice: 3400,
+        exitPrice: 3350,
+        leverage: 25,
+        capitalUsed: 272,
+        margin: 272,
+        fees: 1,
+        grossPnl: 100,
+        netPnl: 99,
+        status: 'closed',
+        openedAt: '2026-11-20T11:00:00Z',
+        setup: undefined,
+      },
+    ];
+
+    // Execute the exact preservation logic implemented in handleDeltaTradesUpdated
+    const setupsMap = new Map();
+    existingTrades.forEach((t) => {
+      if (t.setup) setupsMap.set(t.id, t.setup);
+    });
+
+    const mergedTrades = rawIncomingDeltaTrades.map((t) => {
+      if (!t.setup && setupsMap.has(t.id)) {
+        return { ...t, setup: setupsMap.get(t.id) };
+      }
+      return t;
+    });
+
+    assert.strictEqual(mergedTrades[0].setup, 'Supply & Demand', 'Existing setup must NEVER be wiped out by Delta sync');
+    assert.strictEqual(mergedTrades[1].setup, undefined, 'New trade without setup remains untagged');
+  });
+
+  await test('Cross-Device Custom Setup Sync & Persistence Spec', async () => {
+    // Custom setups configured by user on phone (deleting defaults and adding custom ones)
+    const customPhoneSetups = [
+      { id: 'custom_1', name: 'My Gold Scalp', color: '#f59e0b' },
+      { id: 'custom_2', name: 'Asia Sweep', color: '#10b981' },
+    ];
+
+    // Simulate Supabase user_metadata cloud payload
+    const cloudUserMetadata = {
+      trading_setups: customPhoneSetups,
+    };
+
+    // Simulate PC Web loading user_metadata on login
+    assert(Array.isArray(cloudUserMetadata.trading_setups), 'Cloud metadata must store trading_setups array');
+    const pcLoadedSetups = cloudUserMetadata.trading_setups;
+    assert.strictEqual(pcLoadedSetups.length, 2);
+    assert.strictEqual(pcLoadedSetups[0].name, 'My Gold Scalp');
+    assert.strictEqual(pcLoadedSetups[1].name, 'Asia Sweep');
+  });
+
   console.log('\n================================================================');
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');

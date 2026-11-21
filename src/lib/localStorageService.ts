@@ -168,9 +168,9 @@ class LocalStorageService {
   public getTradingSetups(): TradingSetup[] {
     try {
       const data = localStorage.getItem('tradex_trading_setups');
-      if (data) {
+      if (data !== null) {
         const parsed = JSON.parse(data);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.warn('Error reading trading setups from localStorage:', e);
