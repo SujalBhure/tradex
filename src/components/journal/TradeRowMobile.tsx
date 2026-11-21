@@ -1,7 +1,7 @@
 import React, { useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Transition } from '@headlessui/react';
-import { ChevronDown, MoreVertical, Edit, Trash2, XCircle, TrendingUp, TrendingDown, Image as ImageIcon } from 'lucide-react';
+import { ChevronDown, MoreVertical, Edit, Trash2, XCircle, TrendingUp, TrendingDown, Image as ImageIcon, Tag } from 'lucide-react';
 import { Trade, TradingSetup } from '../../types/trading';
 import { formatCurrency, formatPercentage } from '../../utils/tradingCalculations';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
@@ -153,8 +153,11 @@ export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({
       </div>
 
       {/* Setup Row */}
-      <div className="flex items-center justify-between py-2 px-1 mb-3 border-y border-white/5">
-        <span className="text-xs text-text-muted font-medium">Trading Setup</span>
+      <div className="flex items-center justify-between py-2 px-2.5 mb-3 rounded-lg bg-white/[0.02] border border-white/5">
+        <div className="flex items-center gap-1.5 text-xs text-text-muted font-medium">
+          <Tag className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Trading Setup</span>
+        </div>
         <SetupBadge
           currentSetup={trade.setup}
           setups={setups || []}

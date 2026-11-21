@@ -332,8 +332,8 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
         </div>
       </div>
 
-      {/* Main Setups Performance Table */}
-      <div className="overflow-x-auto scrollbar-thin rounded-xl border border-white/10 bg-[#0d121a]">
+      {/* Main Setups Performance Table (Desktop) */}
+      <div className="hidden md:block overflow-x-auto scrollbar-thin rounded-xl border border-white/10 bg-[#0d121a]">
         <table className="w-full min-w-[800px] text-left text-xs">
           <thead className="uppercase tracking-wider text-[11px] text-slate-400 bg-white/[0.02] border-b border-white/10">
             <tr>
@@ -502,6 +502,143 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Setups Performance Cards (md:hidden) */}
+      <div className="md:hidden space-y-3">
+        {sortedMetrics.map((metric) => {
+          const isPositive = metric.expectancy > 0;
+          const isNegative = metric.expectancy < 0;
+          const hasClosed = metric.closedTrades > 0;
+
+          return (
+            <div
+              key={metric.setup}
+              className="p-4 rounded-xl bg-white/[0.03] border border-white/10 hover:border-emerald-500/30 transition-all space-y-3 relative overflow-hidden"
+            >
+              {/* Card Header: Color, Name, Edge status */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                    style={{ backgroundColor: metric.color }}
+                  />
+                  <span className="font-bold text-white text-sm truncate">
+                    {metric.setup}
+                  </span>
+                </div>
+                {!hasClosed ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] text-slate-400">
+                    Untraded
+                  </span>
+                ) : metric.edge === 'strong_positive' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                    ★ Strong Edge
+                  </span>
+                ) : metric.edge === 'positive' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Positive Edge
+                  </span>
+                ) : metric.edge === 'negative' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                    Negative Edge
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/15 text-slate-400">
+                    Break-Even
+                  </span>
+                )}
+              </div>
+
+              {/* Expectancy Hero & Net P&L */}
+              <div className="flex items-baseline justify-between pt-1 border-t border-white/5">
+                <div>
+                  <span className="text-[11px] text-slate-400 block">Expectancy / Trade</span>
+                  {hasClosed ? (
+                    <span
+                      className={`text-xl font-extrabold font-mono ${
+                        isPositive
+                          ? 'text-emerald-400'
+                          : isNegative
+                          ? 'text-rose-400'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {isPositive ? `+$${metric.expectancy.toFixed(2)}` : isNegative ? `-$${Math.abs(metric.expectancy).toFixed(2)}` : '$0.00'}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500 italic">No closed trades</span>
+                  )}
+                </div>
+
+                {hasClosed && (
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-500 block">Net P&L</span>
+                    <div className="font-bold text-sm">
+                      <CurrencyDisplay value={metric.totalPnL} decimals={2} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Formula representation */}
+              {hasClosed && (
+                <div className="bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/5 font-mono text-[10px] text-slate-300 flex items-center justify-between">
+                  <span className="text-emerald-400 font-medium">
+                    ({metric.winRate.toFixed(0)}% × ${metric.avgWin.toFixed(1)})
+                  </span>
+                  <span className="text-slate-500">−</span>
+                  <span className="text-rose-400 font-medium">
+                    ({metric.lossRate.toFixed(0)}% × ${metric.avgLoss.toFixed(1)})
+                  </span>
+                </div>
+              )}
+
+              {/* Win Rate Bar */}
+              {hasClosed && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-200">
+                    <span>{metric.winRate.toFixed(1)}% Win Rate</span>
+                    <span className="text-slate-400 text-[10px] font-normal">
+                      {metric.winningTrades}W / {metric.losingTrades}L
+                    </span>
+                  </div>
+                  <div className="w-full bg-rose-500/30 h-1.5 rounded-full overflow-hidden flex">
+                    <div
+                      className="bg-emerald-500 h-full transition-all"
+                      style={{ width: `${metric.winRate}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Stats Footer: Avg Win, Avg Loss, Total Trades */}
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5 text-[11px]">
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Avg Win</span>
+                  <span className="text-emerald-400 font-mono font-medium">
+                    {hasClosed ? `+$${metric.avgWin.toFixed(2)}` : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Avg Loss</span>
+                  <span className="text-rose-400 font-mono font-medium">
+                    {hasClosed ? `-$${metric.avgLoss.toFixed(2)}` : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px]">Trades</span>
+                  <span className="text-white font-medium">
+                    {metric.totalTrades}
+                    {metric.openTrades > 0 && (
+                      <span className="text-amber-400 text-[10px] ml-1">({metric.openTrades} open)</span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </GlassCard>
   );

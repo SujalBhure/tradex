@@ -1,7 +1,7 @@
 import React, { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Menu, Transition } from '@headlessui/react';
-import { BookOpen, Calculator, BarChart3, LogOut, User, Download, Zap } from 'lucide-react';
+import { BookOpen, Calculator, BarChart3, LogOut, User, Download, Zap, Smartphone } from 'lucide-react';
 import { DecryptedText, ShinyText } from '../ui/reactbits';
 
 interface HeaderProps {
@@ -275,6 +275,17 @@ export const Header: React.FC<HeaderProps> = ({
                         </button>
                       </Menu.Item>
                     )}
+
+                    <Menu.Item>
+                      <a
+                        href="/TradeX.apk"
+                        download="TradeX.apk"
+                        className="group flex w-full items-center rounded-lg px-3 py-2 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <Smartphone className="mr-2 h-4 w-4 text-emerald-400" />
+                        Download Android App (APK)
+                      </a>
+                    </Menu.Item>
                   </div>
 
                   <div className="px-3 py-2 border-t border-border space-y-2">
