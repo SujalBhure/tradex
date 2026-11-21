@@ -278,8 +278,9 @@ export const Header: React.FC<HeaderProps> = ({
 
                     <Menu.Item>
                       <a
-                        href="/TradeX.apk"
-                        download="TradeX.apk"
+                        href="https://github.com/SujalBhure/tradex/raw/main/TradeX.apk"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="group flex w-full items-center rounded-lg px-3 py-2 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                       >
                         <Smartphone className="mr-2 h-4 w-4 text-emerald-400" />
