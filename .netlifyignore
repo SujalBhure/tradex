@@ -5,3 +5,7 @@ dist
 .git
 .netlify
 tests
+.frames
+.frames_detailed
+*.mp4
+*.zip
