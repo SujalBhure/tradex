@@ -329,17 +329,18 @@ export const supabaseDataService = {
   async fetchTradingSetups(userId: string): Promise<TradingSetup[] | null> {
     if (!supabase || !userId) return null;
     try {
-      // 1. Fetch from database configuration row
+      // 1. Fetch from database configuration row (ordered by newest, resilient against any duplicate legacy rows)
       const { data, error } = await supabase
         .from('trading_notes')
         .select('content')
         .eq('user_id', userId)
         .eq('title', '__tradex_trading_setups__')
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-      if (!error && data?.content) {
+      if (!error && Array.isArray(data) && data.length > 0 && data[0]?.content) {
         try {
-          const parsed = JSON.parse(data.content);
+          const parsed = JSON.parse(data[0].content);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         } catch {}
       }
@@ -355,9 +356,6 @@ export const supabaseDataService = {
     return null;
   },
 
-  /**
-   * Persist custom trading setups to cloud across database and user metadata.
-   */
   /**
    * Persist custom trading setups to cloud across database and user metadata.
    */
@@ -412,11 +410,12 @@ export const supabaseDataService = {
         .select('content')
         .eq('user_id', userId)
         .eq('title', '__tradex_trade_setups_map__')
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-      if (!error && data?.content) {
+      if (!error && Array.isArray(data) && data.length > 0 && data[0]?.content) {
         try {
-          const parsed = JSON.parse(data.content);
+          const parsed = JSON.parse(data[0].content);
           if (parsed && typeof parsed === 'object') return parsed;
         } catch {}
       }

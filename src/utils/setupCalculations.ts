@@ -254,3 +254,29 @@ export function healSetupsFromTrades(
 
   return { healedSetups: current, addedCount };
 }
+
+/**
+ * Bidirectional non-destructive merger for trading setups.
+ * Never drops any setup from either local or cloud source.
+ */
+export function mergeTradingSetups(
+  listA: TradingSetup[],
+  listB: TradingSetup[]
+): TradingSetup[] {
+  const base = Array.isArray(listA) && listA.length > 0 ? [...listA] : [];
+  const known = new Set(base.map((s) => s.name.trim().toLowerCase()));
+
+  if (Array.isArray(listB)) {
+    for (const item of listB) {
+      if (item && item.name && item.name.trim()) {
+        const norm = item.name.trim().toLowerCase();
+        if (!known.has(norm)) {
+          known.add(norm);
+          base.push(item);
+        }
+      }
+    }
+  }
+
+  return base.length > 0 ? base : DEFAULT_TRADING_SETUPS;
+}

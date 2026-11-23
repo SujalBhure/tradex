@@ -8,7 +8,7 @@ import { AuthLayout } from './components/auth/AuthLayout';
 import { TradingCapitalCard } from './components/dashboard/TradingCapitalCard';
 import { MetricsGrid } from './components/dashboard/MetricsGrid';
 import { SetupExpectancyTracker } from './components/dashboard/SetupExpectancyTracker';
-import { healSetupsFromTrades } from './utils/setupCalculations';
+import { healSetupsFromTrades, mergeTradingSetups } from './utils/setupCalculations';
 
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -131,24 +131,18 @@ function App() {
     // a. In-memory state (tradesRef.current) is the authoritative source for live trades
     // b. Updated trade's setup if explicitly present
     // c. Persistent setup map by tradeId (fallback for reconstructed trades)
-    const liveSetups = new Map<string, string | undefined>();
+    const liveSetups = new Map<string, string>();
     tradesRef.current.forEach((t) => {
-      liveSetups.set(t.id, t.setup);
+      if (t.setup && t.setup.trim()) liveSetups.set(t.id, t.setup.trim());
     });
 
     const persistentMap = userId ? localData.getTradeSetupsMap(userId) : {};
 
     const mergedTrades = updatedTrades.map((t) => {
-      if (liveSetups.has(t.id)) {
-        return { ...t, setup: liveSetups.get(t.id) };
-      }
-      if (t.setup) {
-        return t;
-      }
-      if (persistentMap[t.id]) {
-        return { ...t, setup: persistentMap[t.id] };
-      }
-      return t;
+      const liveSetup = liveSetups.get(t.id);
+      const persistentSetup = persistentMap[t.id] || (t.tradeGroupId ? persistentMap[t.tradeGroupId] : undefined);
+      const resolvedSetup = liveSetup || (t.setup && t.setup.trim() ? t.setup.trim() : undefined) || persistentSetup;
+      return resolvedSetup ? { ...t, setup: resolvedSetup } : t;
     });
 
     setTrades(mergedTrades);
@@ -275,12 +269,18 @@ function App() {
               supabaseDataService.fetchTradeSetupsMap(currentUserId),
             ]);
 
-            if (cloudSetups !== null && Array.isArray(cloudSetups) && cloudSetups.length > 0) {
-              setTradingSetups(cloudSetups);
-              localData.saveTradingSetups(cloudSetups);
-            }
+            const currentLocalSetups = localData.getTradingSetups();
+            const mergedSetups = mergeTradingSetups(currentLocalSetups, cloudSetups || []);
+            setTradingSetups(mergedSetups);
+            localData.saveTradingSetups(mergedSetups);
+
             if (cloudSetupMap && Object.keys(cloudSetupMap).length > 0) {
               localData.batchSaveTradeSetupMappings(cloudSetupMap, currentUserId);
+            }
+
+            // Sync any local setups missing from cloud back to cloud
+            if (currentUserId && currentUserId !== DEMO_USER_ID) {
+              supabaseDataService.saveTradingSetups(mergedSetups, currentUserId).catch(() => {});
             }
           } catch (setupErr) {
             console.warn('Setups cloud sync warning:', setupErr);
@@ -512,21 +512,27 @@ function App() {
     }
   }, [isAuthenticated, userId, sessionChecked, loadAndPrepareUserData]);
 
+  const lastExplicitSaveTimestamp = useRef<number>(0);
+
   // Cross-device sync: reload setups when tab/app regains focus or visibility
   useEffect(() => {
     if (!userId || userId === DEMO_USER_ID) return;
 
     const syncCrossDevice = async () => {
+      // If user recently edited or added setups locally, don't let a background focus sync clobber it
+      if (Date.now() - lastExplicitSaveTimestamp.current < 15000) return;
+
       try {
         const cloudSetups = await supabaseDataService.fetchTradingSetups(userId);
-        let activeSetups = localData.getTradingSetups();
-        if (cloudSetups !== null && Array.isArray(cloudSetups) && cloudSetups.length > 0) {
-          activeSetups = cloudSetups;
-        }
-        const { healedSetups, addedCount } = healSetupsFromTrades(activeSetups, tradesRef.current);
-        const finalSetups = addedCount > 0 ? healedSetups : activeSetups;
+        const currentLocal = localData.getTradingSetups();
+        const merged = mergeTradingSetups(currentLocal, cloudSetups || []);
+        const { healedSetups, addedCount } = healSetupsFromTrades(merged, tradesRef.current);
+        const finalSetups = addedCount > 0 ? healedSetups : merged;
         setTradingSetups(finalSetups);
         localData.saveTradingSetups(finalSetups);
+        if (addedCount > 0 && userId && userId !== DEMO_USER_ID) {
+          supabaseDataService.saveTradingSetups(finalSetups, userId).catch(() => {});
+        }
       } catch {}
     };
 
@@ -776,6 +782,7 @@ function App() {
   }, [userId]);
 
   const handleSaveTradingSetups = useCallback(async (newSetups: TradingSetup[]) => {
+    lastExplicitSaveTimestamp.current = Date.now();
     setTradingSetups(newSetups);
     localData.saveTradingSetups(newSetups);
 
@@ -789,12 +796,13 @@ function App() {
   const handleAddNewSetup = useCallback(async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    lastExplicitSaveTimestamp.current = Date.now();
     const created = localData.addTradingSetup(trimmed);
     const updated = localData.getTradingSetups();
     setTradingSetups(updated);
 
     if (userId && userId !== DEMO_USER_ID) {
-      supabaseDataService.saveTradingSetups(updated, userId).catch(() => {});
+      await supabaseDataService.saveTradingSetups(updated, userId);
     }
 
     toast.success(`Created setup: ${created.name}`);
@@ -831,7 +839,22 @@ function App() {
       }
     }
 
-    // 3. Persist to Supabase cloud immediately
+    // 3. If trade was tagged with a setup, guarantee that setup is in the active setups library
+    if (normalizedSetup) {
+      const currentSetups = localData.getTradingSetups();
+      const exists = currentSetups.some((s) => s.name.trim().toLowerCase() === normalizedSetup.toLowerCase());
+      if (!exists) {
+        lastExplicitSaveTimestamp.current = Date.now();
+        localData.addTradingSetup(normalizedSetup);
+        const updatedSetups = localData.getTradingSetups();
+        setTradingSetups(updatedSetups);
+        if (userId && userId !== DEMO_USER_ID) {
+          supabaseDataService.saveTradingSetups(updatedSetups, userId).catch(() => {});
+        }
+      }
+    }
+
+    // 4. Persist to Supabase cloud immediately
     if (userId && userId !== DEMO_USER_ID && supabase) {
       const targetTrade = tradesRef.current.find((t) => t.id === tradeId);
       if (targetTrade) {

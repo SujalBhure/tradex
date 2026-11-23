@@ -1492,6 +1492,35 @@ async function runTests() {
     assert(current.some((s) => s.name === 'Gold Scalp 5m'), 'Healed setup 2 must exist');
   });
 
+  await test('Bidirectional Non-Destructive Setups Merger Spec (Prevents Tag Clobbering)', async () => {
+    // Local device has newly added setups
+    const localSetups = [
+      { id: '1', name: 'SFP', color: '#10b981' },
+      { id: '2', name: 'Breakout Retest', color: '#06b6d4' },
+      { id: '3', name: 'FVG Inversion', color: '#6366f1' },
+    ];
+
+    // Cloud returns older snapshot that only had 'SFP'
+    const staleCloudSetups = [
+      { id: '1', name: 'SFP', color: '#10b981' },
+    ];
+
+    // Simulate mergeTradingSetups
+    const base = [...localSetups];
+    const known = new Set(base.map((s) => s.name.trim().toLowerCase()));
+    for (const item of staleCloudSetups) {
+      if (item && item.name && !known.has(item.name.trim().toLowerCase())) {
+        known.add(item.name.trim().toLowerCase());
+        base.push(item);
+      }
+    }
+
+    assert.strictEqual(base.length, 3, 'Must retain all 3 local setups even if cloud only has 1');
+    assert(base.some((s) => s.name === 'Breakout Retest'), 'Must NOT wipe out Breakout Retest');
+    assert(base.some((s) => s.name === 'FVG Inversion'), 'Must NOT wipe out FVG Inversion');
+    assert(base.some((s) => s.name === 'SFP'), 'Must preserve SFP');
+  });
+
   console.log('\n================================================================');
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');

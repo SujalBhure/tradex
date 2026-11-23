@@ -220,7 +220,14 @@ class LocalStorageService {
       const data = localStorage.getItem(key);
       if (data) {
         const parsed = JSON.parse(data);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed;
+      }
+      if (userId) {
+        const fallback = localStorage.getItem('tradex_trade_setups_map_default');
+        if (fallback) {
+          const parsed = JSON.parse(fallback);
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed;
+        }
       }
     } catch (e) {
       console.warn('Error reading trade setups map from localStorage:', e);
