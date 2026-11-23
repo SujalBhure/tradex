@@ -8,6 +8,7 @@ import { AuthLayout } from './components/auth/AuthLayout';
 import { TradingCapitalCard } from './components/dashboard/TradingCapitalCard';
 import { MetricsGrid } from './components/dashboard/MetricsGrid';
 import { SetupExpectancyTracker } from './components/dashboard/SetupExpectancyTracker';
+import { healSetupsFromTrades } from './utils/setupCalculations';
 
 import { LoadingSpinner } from './components/ui/LoadingSpinner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -274,7 +275,7 @@ function App() {
               supabaseDataService.fetchTradeSetupsMap(currentUserId),
             ]);
 
-            if (cloudSetups !== null) {
+            if (cloudSetups !== null && Array.isArray(cloudSetups) && cloudSetups.length > 0) {
               setTradingSetups(cloudSetups);
               localData.saveTradingSetups(cloudSetups);
             }
@@ -309,6 +310,19 @@ function App() {
 
           if (phantomIds.length > 0) {
             supabaseDataService.deleteTradesBulk(phantomIds, currentUserId).catch(() => {});
+          }
+
+          // Auto-heal: guarantee any setup ever tagged on a trade is immortal in setups list
+          try {
+            const currentSavedSetups = localData.getTradingSetups();
+            const { healedSetups, addedCount } = healSetupsFromTrades(currentSavedSetups, sanitizedTrades);
+            if (addedCount > 0) {
+              setTradingSetups(healedSetups);
+              localData.saveTradingSetups(healedSetups);
+              supabaseDataService.saveTradingSetups(healedSetups, currentUserId).catch(() => {});
+            }
+          } catch (healErr) {
+            console.warn('Auto-heal setups warning:', healErr);
           }
 
           if (sanitizedTrades.length > 0 || cloudCapital > 0) {
@@ -406,12 +420,6 @@ function App() {
           } catch (vaultErr) {
             console.warn('E2EE Vault sync on session start:', vaultErr);
           }
-
-          if (Array.isArray(session.user.user_metadata?.trading_setups)) {
-            const cloudSetups = session.user.user_metadata.trading_setups as TradingSetup[];
-            setTradingSetups(cloudSetups);
-            localData.saveTradingSetups(cloudSetups);
-          }
         } else {
           const localUser = localData.getCurrentUser();
           if (localUser) {
@@ -448,12 +456,6 @@ function App() {
             }
           } catch (vaultErr) {
             console.warn('E2EE Vault sync on auth change:', vaultErr);
-          }
-
-          if (Array.isArray(session.user.user_metadata?.trading_setups)) {
-            const cloudSetups = session.user.user_metadata.trading_setups as TradingSetup[];
-            setTradingSetups(cloudSetups);
-            localData.saveTradingSetups(cloudSetups);
           }
         } else {
           const localUser = localData.getCurrentUser();
@@ -517,10 +519,14 @@ function App() {
     const syncCrossDevice = async () => {
       try {
         const cloudSetups = await supabaseDataService.fetchTradingSetups(userId);
+        let activeSetups = localData.getTradingSetups();
         if (cloudSetups !== null && Array.isArray(cloudSetups) && cloudSetups.length > 0) {
-          setTradingSetups(cloudSetups);
-          localData.saveTradingSetups(cloudSetups);
+          activeSetups = cloudSetups;
         }
+        const { healedSetups, addedCount } = healSetupsFromTrades(activeSetups, tradesRef.current);
+        const finalSetups = addedCount > 0 ? healedSetups : activeSetups;
+        setTradingSetups(finalSetups);
+        localData.saveTradingSetups(finalSetups);
       } catch {}
     };
 
@@ -819,7 +825,7 @@ function App() {
           t.id === tradeId ? { ...t, setup: normalizedSetup } : t
         );
         localData.saveLocalTrades(userId, updatedLocal);
-        localData.saveTradeSetupMapping(tradeId, normalizedSetup, undefined, userId);
+        localData.saveTradeSetupMapping(tradeId, normalizedSetup, groupId, userId);
       } catch (e) {
         console.warn('Failed to save trade setup locally:', e);
       }

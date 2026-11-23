@@ -358,40 +358,35 @@ export const supabaseDataService = {
   /**
    * Persist custom trading setups to cloud across database and user metadata.
    */
+  /**
+   * Persist custom trading setups to cloud across database and user metadata.
+   */
   async saveTradingSetups(setups: TradingSetup[], userId: string): Promise<void> {
     if (!supabase || !userId) return;
     const noteId = toValidUuid(`tradex_trading_setups_${userId}`);
     try {
-      const { data: existing } = await supabase
+      // Use 'general' category to satisfy PostgreSQL CHECK constraint:
+      // CHECK (category IN ('pre-market', 'review', 'psychology', 'mistake', 'playbook', 'general'))
+      const { error: upsertErr } = await supabase
         .from('trading_notes')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('title', '__tradex_trading_setups__')
-        .maybeSingle();
-
-      if (existing?.id) {
-        await supabase
-          .from('trading_notes')
-          .update({
-            content: JSON.stringify(setups),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase
-          .from('trading_notes')
-          .insert({
+        .upsert(
+          {
             id: noteId,
             user_id: userId,
             title: '__tradex_trading_setups__',
-            category: 'system_config',
+            category: 'general',
             content: JSON.stringify(setups),
-            tags: ['__system__'],
+            tags: ['__system__', '__tradex_config__'],
             is_pinned: false,
             date: new Date().toISOString().split('T')[0],
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          });
+          },
+          { onConflict: 'id' }
+        );
+
+      if (upsertErr) {
+        console.error('Error upserting trading setups to trading_notes:', upsertErr);
       }
     } catch (e) {
       console.warn('Error saving trading setups to trading_notes:', e);
@@ -438,36 +433,28 @@ export const supabaseDataService = {
     if (!supabase || !userId) return;
     const mapNoteId = toValidUuid(`tradex_trade_setups_map_${userId}`);
     try {
-      const { data: existing } = await supabase
+      // Use 'general' category to satisfy PostgreSQL CHECK constraint:
+      // CHECK (category IN ('pre-market', 'review', 'psychology', 'mistake', 'playbook', 'general'))
+      const { error: upsertErr } = await supabase
         .from('trading_notes')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('title', '__tradex_trade_setups_map__')
-        .maybeSingle();
-
-      if (existing?.id) {
-        await supabase
-          .from('trading_notes')
-          .update({
-            content: JSON.stringify(map),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id);
-      } else {
-        await supabase
-          .from('trading_notes')
-          .insert({
+        .upsert(
+          {
             id: mapNoteId,
             user_id: userId,
             title: '__tradex_trade_setups_map__',
-            category: 'system_config',
+            category: 'general',
             content: JSON.stringify(map),
-            tags: ['__system__'],
+            tags: ['__system__', '__tradex_config__'],
             is_pinned: false,
             date: new Date().toISOString().split('T')[0],
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          });
+          },
+          { onConflict: 'id' }
+        );
+
+      if (upsertErr) {
+        console.error('Error upserting trade setups map to trading_notes:', upsertErr);
       }
     } catch (e) {
       console.warn('Error saving trade setups map to cloud:', e);

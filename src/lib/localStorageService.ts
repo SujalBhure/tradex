@@ -235,8 +235,14 @@ class LocalStorageService {
       if (setup && setup.trim()) {
         const val = setup.trim();
         current[tradeId] = val;
+        if (groupId) {
+          current[groupId] = val;
+        }
       } else {
         delete current[tradeId];
+        if (groupId) {
+          delete current[groupId];
+        }
       }
       localStorage.setItem(key, JSON.stringify(current));
     } catch (e) {

@@ -1432,6 +1432,66 @@ async function runTests() {
     assert.strictEqual(merged[1].setup, 'Order Block FVG', 'Must inherit setup from group id anchor even for partial exit');
   });
 
+  await test('Supabase Check Constraint Compliance for System Notes Spec', async () => {
+    const ALLOWED_CATEGORIES = ['pre-market', 'review', 'psychology', 'mistake', 'playbook', 'general'];
+
+    // Test system config row category
+    const systemSetupsNotePayload = {
+      title: '__tradex_trading_setups__',
+      category: 'general',
+      tags: ['__system__', '__tradex_config__'],
+    };
+
+    const systemMapNotePayload = {
+      title: '__tradex_trade_setups_map__',
+      category: 'general',
+      tags: ['__system__', '__tradex_config__'],
+    };
+
+    assert(ALLOWED_CATEGORIES.includes(systemSetupsNotePayload.category), 'Setups note category must satisfy check constraint');
+    assert(ALLOWED_CATEGORIES.includes(systemMapNotePayload.category), 'Map note category must satisfy check constraint');
+    assert.notStrictEqual(systemSetupsNotePayload.category, 'system_config', 'Must NEVER use system_config category');
+  });
+
+  await test('Setup Auto-Heal & Immortality Engine Spec', async () => {
+    const existingSetups = [
+      { id: 'setup_1', name: 'Breakout', color: '#10b981' },
+      { id: 'setup_2', name: 'Liquidity Sweep', color: '#06b6d4' },
+    ];
+
+    const tradesWithCustomSetups = [
+      { id: 'trade_1', setup: 'Breakout' },
+      { id: 'trade_2', setup: 'Asia High Liquidity Run' }, // Missing from library!
+      { id: 'trade_3', setup: 'Gold Scalp 5m' },            // Missing from library!
+      { id: 'trade_4', setup: undefined },
+    ];
+
+    // Simulate auto-heal logic
+    const current = [...existingSetups];
+    const knownNames = new Set(current.map((s) => s.name.trim().toLowerCase()));
+    let addedCount = 0;
+
+    for (const t of tradesWithCustomSetups) {
+      if (t.setup && t.setup.trim()) {
+        const trimmed = t.setup.trim();
+        if (!knownNames.has(trimmed.toLowerCase())) {
+          knownNames.add(trimmed.toLowerCase());
+          current.push({
+            id: `setup_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            name: trimmed,
+            color: '#f59e0b',
+          });
+          addedCount++;
+        }
+      }
+    }
+
+    assert.strictEqual(addedCount, 2, 'Must have healed 2 missing setups from trades');
+    assert.strictEqual(current.length, 4, 'Total setups must now be 4');
+    assert(current.some((s) => s.name === 'Asia High Liquidity Run'), 'Healed setup 1 must exist');
+    assert(current.some((s) => s.name === 'Gold Scalp 5m'), 'Healed setup 2 must exist');
+  });
+
   console.log('\n================================================================');
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');

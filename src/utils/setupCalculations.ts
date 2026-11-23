@@ -223,3 +223,34 @@ export function calculateSetupExpectancy(
     totalUntaggedTrades,
   };
 }
+
+/**
+ * Auto-heals setup library by extracting any setup tags present on trades
+ * that are missing from the setups list, ensuring custom setups can never disappear.
+ */
+export function healSetupsFromTrades(
+  existingSetups: TradingSetup[],
+  trades: Trade[]
+): { healedSetups: TradingSetup[]; addedCount: number } {
+  const current = existingSetups && existingSetups.length > 0 ? [...existingSetups] : [...DEFAULT_TRADING_SETUPS];
+  const knownNames = new Set(current.map((s) => s.name.trim().toLowerCase()));
+  let addedCount = 0;
+
+  for (const t of trades) {
+    if (t.setup && t.setup.trim()) {
+      const trimmed = t.setup.trim();
+      if (!knownNames.has(trimmed.toLowerCase())) {
+        knownNames.add(trimmed.toLowerCase());
+        const colorIdx = current.length % SETUP_PALETTE_COLORS.length;
+        current.push({
+          id: `setup_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: trimmed,
+          color: SETUP_PALETTE_COLORS[colorIdx],
+        });
+        addedCount++;
+      }
+    }
+  }
+
+  return { healedSetups: current, addedCount };
+}
