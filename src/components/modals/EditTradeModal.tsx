@@ -66,6 +66,7 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
   const [selectedSetup, setSelectedSetup] = useState<string>(trade?.setup || '');
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [currentScreenshotUrl, setCurrentScreenshotUrl] = useState<string | undefined>(trade.screenshotUrl);
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [positionDetails, setPositionDetails] = useState({
@@ -463,20 +464,67 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
                       className="hidden"
                     />
                     {screenshotFile ? (
-                       <div className="flex items-center justify-between p-3 bg-background-light rounded-lg">
-                        <span className="text-sm text-text-primary truncate">{screenshotFile.name}</span>
-                        <button type="button" onClick={() => setScreenshotFile(null)} className="p-1 text-danger hover:bg-danger/10 rounded-full">
+                      <div className="p-3 bg-background-light rounded-lg border border-border flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          {currentScreenshotUrl && (
+                            <img
+                              src={currentScreenshotUrl}
+                              alt="Screenshot Preview"
+                              className="w-16 h-12 rounded object-cover border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => setPreviewModalUrl(currentScreenshotUrl)}
+                            />
+                          )}
+                          <div className="overflow-hidden">
+                            <span className="text-sm text-text-primary font-medium truncate block">{screenshotFile.name}</span>
+                            <span className="text-xs text-text-muted">Click thumbnail to expand</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScreenshotFile(null);
+                            setCurrentScreenshotUrl(trade.screenshotUrl);
+                          }}
+                          className="p-1.5 text-danger hover:bg-danger/10 rounded-full"
+                          title="Remove attached image"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     ) : currentScreenshotUrl ? (
-                      <div className="flex items-center justify-between p-3 bg-background-light rounded-lg">
-                        <a href={currentScreenshotUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-2 truncate">
-                          <ImageIcon className="w-4 h-4" /> View Current Image
-                        </a>
-                        <button type="button" onClick={() => { setCurrentScreenshotUrl(undefined); setScreenshotFile(null); }} className="p-1 text-danger hover:bg-danger/10 rounded-full">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="p-3 bg-background-light rounded-lg border border-border flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <img
+                            src={currentScreenshotUrl}
+                            alt="Screenshot Preview"
+                            className="w-16 h-12 rounded object-cover border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setPreviewModalUrl(currentScreenshotUrl)}
+                          />
+                          <div className="overflow-hidden">
+                            <span className="text-sm text-text-primary font-medium truncate block">Attached Screenshot</span>
+                            <span className="text-xs text-text-muted">Click thumbnail to view full image</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-2.5 py-1 text-xs text-primary hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCurrentScreenshotUrl(undefined);
+                              setScreenshotFile(null);
+                            }}
+                            className="p-1.5 text-danger hover:bg-danger/10 rounded-full"
+                            title="Remove screenshot"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <button
@@ -503,6 +551,29 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
           </button>
         </div>
       </motion.div>
+
+      {/* Lightbox Preview Modal */}
+      {previewModalUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setPreviewModalUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+            <button
+              onClick={() => setPreviewModalUrl(null)}
+              className="absolute -top-10 right-0 text-white/80 hover:text-white p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewModalUrl}
+              alt="Screenshot Preview"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl border border-white/15"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

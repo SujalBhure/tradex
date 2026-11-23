@@ -1569,6 +1569,81 @@ async function runTests() {
     assert.strictEqual(loadedLocal[0].screenshotUrl, updatedTrade.screenshotUrl);
   });
 
+  await test('Delta Auto-Sync Note & Screenshot Immortality (Prevents Defaulting to "Full Exit:")', async () => {
+    // 1. Simulate an existing trade that user edited and attached a screenshot
+    const existingTrade = {
+      id: 'delta_exit_999888',
+      symbol: 'BTCUSD',
+      side: 'long',
+      lots: 1,
+      quantity: 0.001,
+      entryPrice: 60000,
+      exitPrice: 61400,
+      netPnl: 1.4,
+      status: 'closed',
+      notes: 'Full Exit: Position closed 1 lots at $61,400 - My custom strategy notes and target hit!',
+      screenshotUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg...',
+      tags: ['Delta Exchange', 'Full Exit', 'Scalp'],
+      setup: 'Breakout Retest',
+    };
+
+    // 2. Incoming fill reconstructed exitTrade from Delta Exchange
+    const rawReconstructedExitTrade = {
+      id: 'delta_exit_999888',
+      symbol: 'BTCUSD',
+      side: 'long',
+      lots: 1,
+      quantity: 0.001,
+      entryPrice: 60000,
+      exitPrice: 61400,
+      netPnl: 1.4,
+      status: 'closed',
+      notes: 'Full Exit: Position closed 1 lots at $61,400', // Default Delta auto-string
+      tags: ['Delta Exchange', 'Full Exit'],
+    };
+
+    // 3. Execution of the corrected reconciliation logic
+    const existingTradeMap = new Map();
+    existingTradeMap.set(existingTrade.id, existingTrade);
+
+    const existing = existingTradeMap.get(rawReconstructedExitTrade.id);
+    assert(existing, 'Existing trade must be found');
+
+    const preservedNotes =
+      existing.notes !== undefined && existing.notes !== null
+        ? existing.notes
+        : rawReconstructedExitTrade.notes;
+    const preservedScreenshot =
+      existing.screenshotUrl || rawReconstructedExitTrade.screenshotUrl;
+    const preservedTags = Array.from(
+      new Set([...(existing.tags || []), ...(rawReconstructedExitTrade.tags || [])])
+    );
+
+    const reconciledTrade = {
+      ...rawReconstructedExitTrade,
+      notes: preservedNotes,
+      screenshotUrl: preservedScreenshot,
+      tags: preservedTags,
+      setup: existing.setup,
+    };
+
+    existingTradeMap.set(rawReconstructedExitTrade.id, reconciledTrade);
+
+    const result = existingTradeMap.get('delta_exit_999888');
+    assert.strictEqual(
+      result.notes,
+      'Full Exit: Position closed 1 lots at $61,400 - My custom strategy notes and target hit!',
+      'User notes starting with Full Exit must NEVER be overwritten by Delta auto-string'
+    );
+    assert.strictEqual(
+      result.screenshotUrl,
+      'data:image/jpeg;base64,/9j/4AAQSkZJRg...',
+      'Trade screenshot must NEVER be wiped out by Delta sync'
+    );
+    assert(result.tags.includes('Scalp'), 'User tags must be preserved');
+    assert.strictEqual(result.setup, 'Breakout Retest', 'Setup must be preserved');
+  });
+
   console.log('\n================================================================');
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');

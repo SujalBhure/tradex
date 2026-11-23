@@ -127,22 +127,45 @@ function App() {
     capitalInfo?: DeltaCapitalInfo,
     deletedTradeIds?: string[]
   ) => {
-    // 1. Preserve user-assigned setups:
+    // 1. Preserve user-assigned setups, notes, screenshots and user tags:
     // a. In-memory state (tradesRef.current) is the authoritative source for live trades
-    // b. Updated trade's setup if explicitly present
-    // c. Persistent setup map by tradeId (fallback for reconstructed trades)
-    const liveSetups = new Map<string, string>();
-    tradesRef.current.forEach((t) => {
-      if (t.setup && t.setup.trim()) liveSetups.set(t.id, t.setup.trim());
-    });
+    // b. Persistent setup & annotation maps by tradeId (indestructible anchor against background auto-sync)
+    const liveTradesMap = new Map<string, Trade>();
+    tradesRef.current.forEach((t) => liveTradesMap.set(t.id, t));
 
     const persistentMap = userId ? localData.getTradeSetupsMap(userId) : {};
+    const persistentAnnotations = userId ? localData.getTradeAnnotationsMap(userId) : {};
 
     const mergedTrades = updatedTrades.map((t) => {
-      const liveSetup = liveSetups.get(t.id);
+      const liveTrade = liveTradesMap.get(t.id);
+      const persistentAnnotation = persistentAnnotations[t.id];
+
+      const liveSetup = liveTrade?.setup;
       const persistentSetup = persistentMap[t.id] || (t.tradeGroupId ? persistentMap[t.tradeGroupId] : undefined);
       const resolvedSetup = liveSetup || (t.setup && t.setup.trim() ? t.setup.trim() : undefined) || persistentSetup;
-      return resolvedSetup ? { ...t, setup: resolvedSetup } : t;
+
+      // Strictly preserve user notes and screenshots
+      const resolvedNotes = liveTrade?.notes !== undefined
+        ? liveTrade.notes
+        : (persistentAnnotation?.notes !== undefined ? persistentAnnotation.notes : t.notes);
+
+      const resolvedScreenshot = liveTrade?.screenshotUrl !== undefined
+        ? liveTrade.screenshotUrl
+        : (persistentAnnotation?.screenshotUrl || t.screenshotUrl);
+
+      const resolvedTags = Array.from(new Set([...(liveTrade?.tags || []), ...(t.tags || [])]));
+      const resolvedStopLoss = liveTrade?.stopLoss !== undefined ? liveTrade.stopLoss : t.stopLoss;
+      const resolvedTarget = liveTrade?.target !== undefined ? liveTrade.target : t.target;
+
+      return {
+        ...t,
+        setup: resolvedSetup,
+        notes: resolvedNotes,
+        screenshotUrl: resolvedScreenshot,
+        tags: resolvedTags,
+        stopLoss: resolvedStopLoss,
+        target: resolvedTarget,
+      };
     });
 
     setTrades(mergedTrades);
@@ -327,6 +350,7 @@ function App() {
 
           if (sanitizedTrades.length > 0 || cloudCapital > 0) {
             setTrades(sanitizedTrades);
+            tradesRef.current = sanitizedTrades;
             setTradingCapital(cloudCapital);
             setShowWelcomeModal(false);
             setRealtimeStatus('connected');
@@ -350,6 +374,7 @@ function App() {
                 : localFallback.trades;
 
               setTrades(sanitizedLocal);
+              tradesRef.current = sanitizedLocal;
               setTradingCapital(localFallback.capital || 0);
               setShowWelcomeModal(false);
               setRealtimeStatus('connected');
@@ -364,6 +389,7 @@ function App() {
           }
 
           setTrades(sanitizedTrades);
+          tradesRef.current = sanitizedTrades;
           setTradingCapital(cloudCapital);
           setShowWelcomeModal(cloudCapital === 0 && sanitizedTrades.length === 0);
           setRealtimeStatus('connected');
@@ -807,6 +833,8 @@ function App() {
       if (tradeWithRR.setup) {
         localData.saveTradeSetupMapping(tradeWithRR.id, tradeWithRR.setup, tradeWithRR.tradeGroupId, userId);
       }
+      // Save notes and screenshot in persistent trade annotations map
+      localData.saveTradeAnnotation(tradeWithRR.id, tradeWithRR.notes, tradeWithRR.screenshotUrl, userId);
     } catch (e) {
       console.warn('Failed to save updated trade locally:', e);
     }

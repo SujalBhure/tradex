@@ -267,6 +267,59 @@ class LocalStorageService {
       console.warn('Error batch saving trade setup mappings to localStorage:', e);
     }
   }
+
+  // --- PERSISTENT TRADE ANNOTATIONS (NOTES & SCREENSHOTS) ---
+  // Guaranteed anchor to preserve user notes and screenshots against Delta auto-sync overwrites
+  public getTradeAnnotationsMap(userId?: string): Record<string, { notes?: string; screenshotUrl?: string }> {
+    try {
+      const key = `tradex_trade_annotations_map_${userId || 'default'}`;
+      const data = localStorage.getItem(key);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+      if (userId) {
+        const fallback = localStorage.getItem('tradex_trade_annotations_map_default');
+        if (fallback) {
+          const parsed = JSON.parse(fallback);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading trade annotations map from localStorage:', e);
+    }
+    return {};
+  }
+
+  public getTradeAnnotation(tradeId: string, userId?: string): { notes?: string; screenshotUrl?: string } | undefined {
+    const map = this.getTradeAnnotationsMap(userId);
+    return map[tradeId];
+  }
+
+  public saveTradeAnnotation(tradeId: string, notes?: string, screenshotUrl?: string, userId?: string): void {
+    try {
+      const key = `tradex_trade_annotations_map_${userId || 'default'}`;
+      const current = this.getTradeAnnotationsMap(userId);
+      current[tradeId] = {
+        notes: notes !== undefined ? notes : current[tradeId]?.notes,
+        screenshotUrl: screenshotUrl !== undefined ? screenshotUrl : current[tradeId]?.screenshotUrl,
+      };
+      localStorage.setItem(key, JSON.stringify(current));
+    } catch (e) {
+      console.warn('Error saving trade annotation to localStorage:', e);
+    }
+  }
+
+  public batchSaveTradeAnnotations(annotations: Record<string, { notes?: string; screenshotUrl?: string }>, userId?: string): void {
+    try {
+      const key = `tradex_trade_annotations_map_${userId || 'default'}`;
+      const current = this.getTradeAnnotationsMap(userId);
+      const merged = { ...current, ...annotations };
+      localStorage.setItem(key, JSON.stringify(merged));
+    } catch (e) {
+      console.warn('Error batch saving trade annotations to localStorage:', e);
+    }
+  }
 }
 
 export const localStorageService = new LocalStorageService();

@@ -865,19 +865,36 @@ class DeltaExchangeService {
             existingTradeMap.set(exitTradeId, exitTrade);
             newCount++;
           } else {
+            const persistentAnnotation = localStorageService.getTradeAnnotation(exitTradeId, userId);
             const preservedNotes =
-              existing.notes &&
-                !existing.notes.startsWith('Partial Exit:') &&
-                !existing.notes.startsWith('Full Exit:')
+              existing.notes !== undefined && existing.notes !== null
                 ? existing.notes
-                : exitTrade.notes;
+                : (persistentAnnotation?.notes !== undefined ? persistentAnnotation.notes : exitTrade.notes);
+            const preservedScreenshot =
+              existing.screenshotUrl || persistentAnnotation?.screenshotUrl;
+            const preservedTags = Array.from(
+              new Set([...(existing.tags || []), ...(exitTrade.tags || [])])
+            );
+
             existingTradeMap.set(exitTradeId, {
               ...exitTrade,
               notes: preservedNotes,
-              tags: exitTrade.tags,
+              screenshotUrl: preservedScreenshot,
+              tags: preservedTags,
               setup: existing ? existing.setup : groupSetup,
+              stopLoss: existing.stopLoss ?? exitTrade.stopLoss,
+              target: existing.target ?? exitTrade.target,
+              riskRewardRatio: existing.riskRewardRatio ?? exitTrade.riskRewardRatio,
             });
-            updatedCount++;
+
+            // Only count as updated if exchange execution fields actually shifted
+            if (
+              existing.exitPrice !== exitTrade.exitPrice ||
+              existing.status !== exitTrade.status ||
+              existing.netPnl !== exitTrade.netPnl
+            ) {
+              updatedCount++;
+            }
           }
 
           // Update position tracker
@@ -1121,11 +1138,20 @@ class DeltaExchangeService {
       }
     }
 
-    // Safety pass: strictly preserve all user setups from existingTrades and persistent setup map
+    // Safety pass: strictly preserve all user setups, notes, and screenshots from persistent map
     const persistentMap = localStorageService.getTradeSetupsMap(userId);
+    const persistentAnnotations = localStorageService.getTradeAnnotationsMap(userId);
     for (const [id, trade] of existingTradeMap.entries()) {
       if (!trade.setup && persistentMap[id]) {
         trade.setup = persistentMap[id];
+      }
+      if (persistentAnnotations[id]) {
+        if (persistentAnnotations[id].notes !== undefined && (!trade.notes || trade.notes.startsWith('Full Exit:') || trade.notes.startsWith('Partial Exit:'))) {
+          trade.notes = persistentAnnotations[id].notes;
+        }
+        if (persistentAnnotations[id].screenshotUrl && !trade.screenshotUrl) {
+          trade.screenshotUrl = persistentAnnotations[id].screenshotUrl;
+        }
       }
     }
 
@@ -1378,7 +1404,7 @@ class DeltaExchangeService {
     if (this.ws) {
       try {
         this.ws.close();
-      } catch {}
+      } catch { }
       this.ws = null;
     }
     this.wsConnectionStatus = 'disconnected';
@@ -1423,9 +1449,9 @@ class DeltaExchangeService {
           }
         }).then((handle) => {
           this.capAppStateHandler = handle;
-        }).catch(() => {});
+        }).catch(() => { });
       }
-    } catch {}
+    } catch { }
   }
 
   private removeVisibilityListeners() {
@@ -1441,7 +1467,7 @@ class DeltaExchangeService {
     if (this.capAppStateHandler) {
       try {
         this.capAppStateHandler.remove();
-      } catch {}
+      } catch { }
       this.capAppStateHandler = null;
     }
   }

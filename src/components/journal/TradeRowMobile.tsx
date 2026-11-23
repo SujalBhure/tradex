@@ -1,7 +1,7 @@
 import React, { useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, Transition } from '@headlessui/react';
-import { ChevronDown, MoreVertical, Edit, Trash2, XCircle, TrendingUp, TrendingDown, Image as ImageIcon, Tag } from 'lucide-react';
+import { ChevronDown, MoreVertical, Edit, Trash2, XCircle, TrendingUp, TrendingDown, Image as ImageIcon, Tag, X } from 'lucide-react';
 import { Trade, TradingSetup } from '../../types/trading';
 import { formatCurrency, formatPercentage } from '../../utils/tradingCalculations';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
@@ -37,6 +37,7 @@ export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({
   onAddNewSetup,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
 
   const isWin = trade.status === 'closed' && (trade.netPnl || 0) > 0;
   const isLoss = trade.status === 'closed' && (trade.netPnl || 0) < 0;
@@ -234,10 +235,7 @@ export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({
                             className="max-h-48 w-full rounded-xl border border-white/10 shadow-lg object-contain bg-black/40 hover:border-emerald-500/50 transition-all cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const w = window.open('');
-                              if (w) {
-                                w.document.write(`<title>Trade Screenshot</title><body style="margin:0;background:#0b0e14;display:flex;align-items:center;justify-content:center;height:100vh;"><img src="${trade.screenshotUrl}" style="max-width:100%;max-height:100%;object-fit:contain;"/></body>`);
-                              }
+                              setShowLightbox(true);
                             }}
                           />
                           <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
@@ -251,6 +249,29 @@ export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Lightbox Modal */}
+      {showLightbox && trade.screenshotUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3"
+          onClick={() => setShowLightbox(false)}
+        >
+          <div className="relative max-w-full max-h-[92vh] flex flex-col items-center">
+            <button
+              onClick={() => setShowLightbox(false)}
+              className="absolute -top-10 right-0 text-white/80 hover:text-white p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={trade.screenshotUrl}
+              alt="Trade Screenshot Full"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl border border-white/15"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </GlassCard>
   );
 };
