@@ -112,6 +112,7 @@ class DeltaExchangeService {
   private syncDebounceTimer: any = null;
   private activeGetExistingTrades: (() => Trade[]) | null = null;
   private activeOnSynced: ((trades: Trade[], capitalInfo?: DeltaCapitalInfo, deletedTradeIds?: string[]) => void) | null = null;
+  private activeUserId?: string;
 
   // Window, Tab & Native App State Listeners
   private boundVisibilityHandler: (() => void) | null = null;
@@ -874,7 +875,7 @@ class DeltaExchangeService {
               ...exitTrade,
               notes: preservedNotes,
               tags: exitTrade.tags,
-              setup: existing.setup || groupSetup,
+              setup: existing ? existing.setup : groupSetup,
             });
             updatedCount++;
           }
@@ -1120,31 +1121,11 @@ class DeltaExchangeService {
       }
     }
 
-    // Safety pass: strictly preserve all user setups from existingTrades, group anchors, and persistent setup map
+    // Safety pass: strictly preserve all user setups from existingTrades and persistent setup map
     const persistentMap = localStorageService.getTradeSetupsMap(userId);
-    const existingSetups = new Map<string, string>(Object.entries(persistentMap));
-    const existingSetupsByGroup = new Map<string, string>();
-
-    Object.entries(persistentMap).forEach(([k, v]) => {
-      if (k.startsWith('delta_group_') || k.startsWith('delta_pos_')) {
-        existingSetupsByGroup.set(k, v);
-      }
-    });
-
-    existingTrades.forEach((t) => {
-      if (t.setup) {
-        existingSetups.set(t.id, t.setup);
-        if (t.tradeGroupId) existingSetupsByGroup.set(t.tradeGroupId, t.setup);
-      }
-    });
-
     for (const [id, trade] of existingTradeMap.entries()) {
-      if (!trade.setup) {
-        if (existingSetups.has(id)) {
-          trade.setup = existingSetups.get(id);
-        } else if (trade.tradeGroupId && existingSetupsByGroup.has(trade.tradeGroupId)) {
-          trade.setup = existingSetupsByGroup.get(trade.tradeGroupId);
-        }
+      if (!trade.setup && persistentMap[id]) {
+        trade.setup = persistentMap[id];
       }
     }
 
@@ -1473,7 +1454,7 @@ class DeltaExchangeService {
     this.syncDebounceTimer = setTimeout(async () => {
       if (!this.isConfigured() || this.isSyncing) return;
       const currentTrades = this.activeGetExistingTrades ? this.activeGetExistingTrades() : [];
-      const res = await this.syncTrades(currentTrades);
+      const res = await this.syncTrades(currentTrades, this.activeUserId);
       if (
         res.success &&
         (res.newTradesCount > 0 ||
@@ -1493,11 +1474,13 @@ class DeltaExchangeService {
   // Connects WebSocket live stream, hooks tab/app focus events, and runs a high-frequency polling loop
   public startAutoSync(
     getExistingTrades?: () => Trade[],
-    onSynced?: (trades: Trade[], capitalInfo?: DeltaCapitalInfo, deletedTradeIds?: string[]) => void
+    onSynced?: (trades: Trade[], capitalInfo?: DeltaCapitalInfo, deletedTradeIds?: string[]) => void,
+    userId?: string
   ) {
     this.stopAutoSync();
     if (getExistingTrades) this.activeGetExistingTrades = getExistingTrades;
     if (onSynced) this.activeOnSynced = onSynced;
+    if (userId) this.activeUserId = userId;
 
     if (!this.creds.autoSync || !this.isConfigured()) return;
 

@@ -338,13 +338,15 @@ export const supabaseDataService = {
         .maybeSingle();
 
       if (!error && data?.content) {
-        const parsed = JSON.parse(data.content);
-        if (Array.isArray(parsed)) return parsed;
+        try {
+          const parsed = JSON.parse(data.content);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch {}
       }
 
       // 2. Fallback to auth user metadata
       const { data: authData } = await supabase.auth.getUser();
-      if (Array.isArray(authData?.user?.user_metadata?.trading_setups)) {
+      if (Array.isArray(authData?.user?.user_metadata?.trading_setups) && authData.user.user_metadata.trading_setups.length > 0) {
         return authData.user.user_metadata.trading_setups;
       }
     } catch (e) {
@@ -358,27 +360,49 @@ export const supabaseDataService = {
    */
   async saveTradingSetups(setups: TradingSetup[], userId: string): Promise<void> {
     if (!supabase || !userId) return;
+    const noteId = toValidUuid(`tradex_trading_setups_${userId}`);
     try {
-      // 1. Save to dedicated configuration row in trading_notes
-      await supabase.from('trading_notes').upsert({
-        id: '00000000-0000-4000-a000-000000000099',
-        user_id: userId,
-        title: '__tradex_trading_setups__',
-        category: 'system_config',
-        content: JSON.stringify(setups),
-        tags: ['__system__'],
-        is_pinned: false,
-        date: new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      const { data: existing } = await supabase
+        .from('trading_notes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('title', '__tradex_trading_setups__')
+        .maybeSingle();
 
-      // 2. Also sync to auth user_metadata
+      if (existing?.id) {
+        await supabase
+          .from('trading_notes')
+          .update({
+            content: JSON.stringify(setups),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('trading_notes')
+          .insert({
+            id: noteId,
+            user_id: userId,
+            title: '__tradex_trading_setups__',
+            category: 'system_config',
+            content: JSON.stringify(setups),
+            tags: ['__system__'],
+            is_pinned: false,
+            date: new Date().toISOString().split('T')[0],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+      }
+    } catch (e) {
+      console.warn('Error saving trading setups to trading_notes:', e);
+    }
+
+    try {
       await supabase.auth.updateUser({
         data: { trading_setups: setups },
       });
     } catch (e) {
-      console.warn('Error saving trading setups to cloud:', e);
+      console.warn('Error saving trading setups to user_metadata:', e);
     }
   },
 
@@ -396,8 +420,10 @@ export const supabaseDataService = {
         .maybeSingle();
 
       if (!error && data?.content) {
-        const parsed = JSON.parse(data.content);
-        if (parsed && typeof parsed === 'object') return parsed;
+        try {
+          const parsed = JSON.parse(data.content);
+          if (parsed && typeof parsed === 'object') return parsed;
+        } catch {}
       }
     } catch (e) {
       console.warn('Error fetching trade setups map from cloud:', e);
@@ -410,19 +436,39 @@ export const supabaseDataService = {
    */
   async saveTradeSetupsMap(map: Record<string, string>, userId: string): Promise<void> {
     if (!supabase || !userId) return;
+    const mapNoteId = toValidUuid(`tradex_trade_setups_map_${userId}`);
     try {
-      await supabase.from('trading_notes').upsert({
-        id: '00000000-0000-4000-a000-000000000098',
-        user_id: userId,
-        title: '__tradex_trade_setups_map__',
-        category: 'system_config',
-        content: JSON.stringify(map),
-        tags: ['__system__'],
-        is_pinned: false,
-        date: new Date().toISOString().split('T')[0],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      const { data: existing } = await supabase
+        .from('trading_notes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('title', '__tradex_trade_setups_map__')
+        .maybeSingle();
+
+      if (existing?.id) {
+        await supabase
+          .from('trading_notes')
+          .update({
+            content: JSON.stringify(map),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('trading_notes')
+          .insert({
+            id: mapNoteId,
+            user_id: userId,
+            title: '__tradex_trade_setups_map__',
+            category: 'system_config',
+            content: JSON.stringify(map),
+            tags: ['__system__'],
+            is_pinned: false,
+            date: new Date().toISOString().split('T')[0],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+      }
     } catch (e) {
       console.warn('Error saving trade setups map to cloud:', e);
     }

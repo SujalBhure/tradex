@@ -80,8 +80,8 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
     return trades.filter((t) => t.status === 'closed' && typeof t.netPnl === 'number').length;
   }, [trades]);
 
-  const coveragePercent = totalClosedTrades > 0
-    ? Math.round(((totalClosedTrades - totalUntaggedTrades) / totalClosedTrades) * 100)
+  const coveragePercent = trades.length > 0
+    ? Math.round((totalCategorizedTrades / trades.length) * 100)
     : 0;
 
   return (
@@ -388,6 +388,11 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
                         </span>
                         <span className="text-[10px] text-slate-400">per trade</span>
                       </div>
+                    ) : metric.openTrades > 0 ? (
+                      <div className="flex flex-col">
+                        <span className="text-amber-400 font-semibold text-xs">Pending Realized Exit</span>
+                        <span className="text-[10px] text-slate-400">{metric.openTrades} active position{metric.openTrades > 1 ? 's' : ''}</span>
+                      </div>
                     ) : (
                       <span className="text-slate-500 italic">No closed trades</span>
                     )}
@@ -476,9 +481,15 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
                   {/* Edge Status */}
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     {!hasClosed ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] text-slate-400">
-                        Untraded
-                      </span>
+                      metric.openTrades > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          {metric.openTrades} Open Position{metric.openTrades > 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] text-slate-400">
+                          Untraded
+                        </span>
+                      )
                     ) : metric.edge === 'strong_positive' ? (
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                         ★ Strong Edge
@@ -528,9 +539,15 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
                   </span>
                 </div>
                 {!hasClosed ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] text-slate-400">
-                    Untraded
-                  </span>
+                  metric.openTrades > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      {metric.openTrades} Open Position{metric.openTrades > 1 ? 's' : ''}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.04] text-slate-400">
+                      Untraded
+                    </span>
+                  )
                 ) : metric.edge === 'strong_positive' ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
                     ★ Strong Edge
@@ -565,6 +582,10 @@ export const SetupExpectancyTracker: React.FC<SetupExpectancyTrackerProps> = ({
                       }`}
                     >
                       {isPositive ? `+$${metric.expectancy.toFixed(2)}` : isNegative ? `-$${Math.abs(metric.expectancy).toFixed(2)}` : '$0.00'}
+                    </span>
+                  ) : metric.openTrades > 0 ? (
+                    <span className="text-amber-400 font-semibold text-xs block">
+                      Pending Exit ({metric.openTrades} active)
                     </span>
                   ) : (
                     <span className="text-xs text-slate-500 italic">No closed trades</span>

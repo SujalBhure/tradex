@@ -81,13 +81,12 @@ export const SetupBadge: React.FC<SetupBadgeProps> = ({
 
   const handleSelect = (name: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onSelectSetup(name);
-    setIsOpen(false);
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSelectSetup('');
+    const isAlreadySelected = currentSetup?.trim().toLowerCase() === name.trim().toLowerCase();
+    if (isAlreadySelected) {
+      onSelectSetup('');
+    } else {
+      onSelectSetup(name);
+    }
     setIsOpen(false);
   };
 
@@ -104,9 +103,8 @@ export const SetupBadge: React.FC<SetupBadgeProps> = ({
         }
       } catch {}
     }
-    onSelectSetup(name);
     setNewSetupName('');
-    setIsOpen(false);
+    setSearch('');
   };
 
   const color = getSetupColor(currentSetup, setups);
@@ -231,19 +229,9 @@ export const SetupBadge: React.FC<SetupBadgeProps> = ({
                 </div>
               </form>
 
-              {/* Footer with Clear & Manage */}
+              {/* Footer with hint & Manage Setups */}
               <div className="mt-2 pt-1.5 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
-                {currentSetup ? (
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    className="flex items-center gap-1 text-rose-400 hover:text-rose-300 hover:underline"
-                  >
-                    <X className="w-3 h-3" /> Remove Setup
-                  </button>
-                ) : (
-                  <span className="text-slate-500">Pick or type a setup</span>
-                )}
+                <span className="text-slate-500">Click setup to toggle on/off</span>
 
                 {onOpenManageSetups && (
                   <button
@@ -365,19 +353,9 @@ export const SetupBadge: React.FC<SetupBadgeProps> = ({
                   </div>
                 </form>
 
-                {/* Footer with Clear & Manage */}
+                {/* Footer with hint & Manage Setups */}
                 <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs text-slate-400 shrink-0">
-                  {currentSetup ? (
-                    <button
-                      type="button"
-                      onClick={handleClear}
-                      className="flex items-center gap-1.5 text-rose-400 hover:text-rose-300 font-medium"
-                    >
-                      <X className="w-3.5 h-3.5" /> Remove Setup
-                    </button>
-                  ) : (
-                    <span className="text-slate-500 text-[11px]">Select a setup above</span>
-                  )}
+                  <span className="text-slate-500 text-[11px]">Tap setup to toggle on/off</span>
 
                   {onOpenManageSetups && (
                     <button

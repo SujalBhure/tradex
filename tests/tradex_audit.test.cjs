@@ -766,10 +766,10 @@ async function runTests() {
         netDeposits > 0
           ? netDeposits
           : totalDeposits > 0
-          ? totalDeposits
-          : inferredInitialCapital > 0
-          ? inferredInitialCapital
-          : currentBalance;
+            ? totalDeposits
+            : inferredInitialCapital > 0
+              ? inferredInitialCapital
+              : currentBalance;
 
       return {
         currentBalance: parseFloat(currentBalance.toFixed(2)),
@@ -1341,33 +1341,53 @@ async function runTests() {
     assert.strictEqual(pcLoadedSetups[1].name, 'Asia Sweep');
   });
 
-  await test('SetupBadge Inline Quick-Add Contract (Prevents Async Promise / Undefined Leak)', async () => {
+  await test('SetupBadge Toggle-to-Unselect & Quick-Add Without Auto-Tagging Contract', async () => {
     let capturedSelectedSetup = null;
     const mockOnSelectSetup = (setupName) => {
       capturedSelectedSetup = setupName;
     };
 
-    // Simulate async onAddNewSetup handler (as implemented in App.tsx)
+    // 1. Adding a new setup should add it without auto-tagging
+    let createdSetup = null;
     const mockOnAddNewSetup = async (name) => {
-      return { id: 'setup_123', name: name.trim(), color: '#10b981' };
+      createdSetup = { id: 'setup_123', name: name.trim(), color: '#10b981' };
+      return createdSetup;
     };
 
-    // Simulate SetupBadge handleCreateNew
     const inputName = 'Liquidity Sweep Reversal';
     const trimmed = inputName.trim();
     if (mockOnAddNewSetup) {
       try {
         const res = mockOnAddNewSetup(trimmed);
         if (res && typeof res.then === 'function') {
-          res.catch(() => {});
+          res.catch(() => { });
         }
-      } catch {}
+      } catch { }
     }
-    mockOnSelectSetup(trimmed);
+    // New contract: do NOT call mockOnSelectSetup(trimmed) on add
+    assert.strictEqual(createdSetup.name, 'Liquidity Sweep Reversal', 'Setup must be created');
+    assert.strictEqual(capturedSelectedSetup, null, 'Must NOT auto-tag the trade when creating a setup');
 
-    assert.strictEqual(typeof capturedSelectedSetup, 'string', 'Selected setup must be a string');
-    assert.strictEqual(capturedSelectedSetup, 'Liquidity Sweep Reversal', 'Must select exact typed setup name');
-    assert.notStrictEqual(capturedSelectedSetup, undefined, 'Must NEVER select undefined due to async promise');
+    // 2. Selecting an unselected setup tags it
+    let currentSetup = '';
+    const handleSelect = (name) => {
+      const isAlreadySelected = currentSetup?.trim().toLowerCase() === name.trim().toLowerCase();
+      if (isAlreadySelected) {
+        mockOnSelectSetup('');
+        currentSetup = '';
+      } else {
+        mockOnSelectSetup(name);
+        currentSetup = name;
+      }
+    };
+
+    handleSelect('Liquidity Sweep Reversal');
+    assert.strictEqual(capturedSelectedSetup, 'Liquidity Sweep Reversal', 'Should tag selected setup');
+
+    // 3. Selecting the currently assigned setup again toggles it OFF (unselects)
+    handleSelect('Liquidity Sweep Reversal');
+    assert.strictEqual(capturedSelectedSetup, '', 'Should unselect/untag when clicking active setup again');
+    assert.strictEqual(currentSetup, '', 'Current setup should be cleared');
   });
 
   await test('Persistent Trade Setups Map Anchor & Group ID Fallback Engine', async () => {

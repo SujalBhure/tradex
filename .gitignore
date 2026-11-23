@@ -36,3 +36,6 @@ Thumbs.db
 *.log
 .claude/
 _recovered_from_websites_root/
+.frames/
+.frames_detailed/
+*.mp4
