@@ -226,10 +226,24 @@ export const TradeRowMobile: React.FC<TradeRowMobileProps> = ({
                 <div><p className="text-text-muted">R:R Ratio</p><p className="font-medium">{trade.riskRewardRatio && trade.riskRewardRatio > 0 ? `1:${trade.riskRewardRatio.toFixed(1)}` : 'N/A'}</p></div>
                 {trade.screenshotUrl && (
                     <div className="col-span-2 mt-2">
-                        <p className="text-text-muted mb-1">Screenshot</p>
-                        <a href={trade.screenshotUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-2">
-                            <ImageIcon className="w-4 h-4" /> View Image
-                        </a>
+                        <p className="text-text-muted mb-1.5 text-xs font-semibold">Trade Screenshot</p>
+                        <div className="relative inline-block w-full">
+                          <img
+                            src={trade.screenshotUrl}
+                            alt="Trade Screenshot"
+                            className="max-h-48 w-full rounded-xl border border-white/10 shadow-lg object-contain bg-black/40 hover:border-emerald-500/50 transition-all cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const w = window.open('');
+                              if (w) {
+                                w.document.write(`<title>Trade Screenshot</title><body style="margin:0;background:#0b0e14;display:flex;align-items:center;justify-content:center;height:100vh;"><img src="${trade.screenshotUrl}" style="max-width:100%;max-height:100%;object-fit:contain;"/></body>`);
+                              }
+                            }}
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3 text-emerald-400" /> Tap image to view full screen
+                          </p>
+                        </div>
                     </div>
                 )}
                 {trade.notes && <div className="col-span-2 mt-2"><p className="text-text-muted">Notes</p><p className="text-text-primary whitespace-pre-wrap font-medium">{trade.notes}</p></div>}

@@ -692,18 +692,34 @@ function App() {
       riskRewardRatio: calculateRiskRewardRatio(newTradeData),
     };
 
-    if (userId !== DEMO_USER_ID) {
-      if (supabase) {
-        try {
-          await supabaseDataService.saveTrade(trade, userId);
-        } catch (err: any) {
-          console.error('Supabase trade save failed:', err);
-          toast.error('Cloud save failed: ' + err.message);
-        }
+    // 1. Synchronously update in-memory state & tradesRef
+    setTrades(prev => {
+      const updated = [trade, ...prev];
+      tradesRef.current = updated;
+      return updated;
+    });
+
+    // 2. Persist to local cache immediately
+    try {
+      const currentTrades = localData.getLocalTrades(userId);
+      localData.saveLocalTrades(userId, [trade, ...currentTrades]);
+      if (trade.setup) {
+        localData.saveTradeSetupMapping(trade.id, trade.setup, trade.tradeGroupId, userId);
+      }
+    } catch (e) {
+      console.warn('Failed to cache new trade locally:', e);
+    }
+
+    // 3. Persist to Supabase cloud
+    if (userId !== DEMO_USER_ID && supabase) {
+      try {
+        await supabaseDataService.saveTrade(trade, userId);
+      } catch (err: any) {
+        console.error('Supabase trade save failed:', err);
+        toast.error('Cloud save failed: ' + err.message);
       }
     }
 
-    setTrades(prev => [trade, ...prev]);
     setModalState(prev => ({ ...prev, add: false }));
     setActiveTab('journal');
     toast.success('Trade added successfully!');
@@ -738,7 +754,16 @@ function App() {
         }
       }
 
-      setTrades((prev) => [...parsedTrades, ...prev]);
+      setTrades((prev) => {
+        const updated = [...parsedTrades, ...prev];
+        tradesRef.current = updated;
+        return updated;
+      });
+      try {
+        const currentTrades = localData.getLocalTrades(userId);
+        localData.saveLocalTrades(userId, [...parsedTrades, ...currentTrades]);
+      } catch (e) {}
+
       setActiveTab('journal');
       toast.success(`Successfully imported ${parsedTrades.length} trade(s) from ${file.name}!`);
     } catch (error: any) {
@@ -765,17 +790,37 @@ function App() {
     if (!userId) return;
     const tradeWithRR = { ...updatedTrade, riskRewardRatio: calculateRiskRewardRatio(updatedTrade) };
 
-    if (userId !== DEMO_USER_ID) {
-      if (supabase) {
-        try {
-          await supabaseDataService.saveTrade(tradeWithRR, userId);
-        } catch (err: any) {
-          console.error('Supabase trade update failed:', err);
-        }
+    // 1. Synchronously update in-memory state and authoritative tradesRef
+    setTrades(prev => {
+      const updated = prev.map(t => t.id === updatedTrade.id ? tradeWithRR : t);
+      tradesRef.current = updated;
+      return updated;
+    });
+
+    // 2. Persist to local cache immediately
+    try {
+      const currentTrades = localData.getLocalTrades(userId);
+      const updatedLocal = currentTrades.map(t => t.id === updatedTrade.id ? tradeWithRR : t);
+      localData.saveLocalTrades(userId, updatedLocal);
+
+      // If setup was updated, preserve in persistent setup map
+      if (tradeWithRR.setup) {
+        localData.saveTradeSetupMapping(tradeWithRR.id, tradeWithRR.setup, tradeWithRR.tradeGroupId, userId);
+      }
+    } catch (e) {
+      console.warn('Failed to save updated trade locally:', e);
+    }
+
+    // 3. Persist to Supabase cloud immediately
+    if (userId !== DEMO_USER_ID && supabase) {
+      try {
+        await supabaseDataService.saveTrade(tradeWithRR, userId);
+      } catch (err: any) {
+        console.error('Supabase trade update failed:', err);
+        toast.error('Cloud sync failed: ' + (err.message || 'unknown error'));
       }
     }
 
-    setTrades(prev => prev.map(t => t.id === updatedTrade.id ? tradeWithRR : t));
     setModalState(prev => ({ ...prev, edit: false }));
     setSelectedTrade(null);
     toast.success('Trade updated successfully!');
@@ -884,7 +929,16 @@ function App() {
     const tradeToDelete = trades.find(t => t.id === tradeId) || (selectedTrade?.id === tradeId ? selectedTrade : null);
     if (!tradeToDelete) return;
 
-    setTrades(prev => prev.filter(t => t.id !== tradeId));
+    setTrades(prev => {
+      const updated = prev.filter(t => t.id !== tradeId);
+      tradesRef.current = updated;
+      return updated;
+    });
+    try {
+      const currentTrades = localData.getLocalTrades(userId);
+      localData.saveLocalTrades(userId, currentTrades.filter(t => t.id !== tradeId));
+    } catch (e) {}
+
     setModalState(prev => ({ ...prev, delete: false }));
     setSelectedTrade(null);
 

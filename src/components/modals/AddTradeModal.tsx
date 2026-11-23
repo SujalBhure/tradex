@@ -11,6 +11,7 @@ import { ToggleSwitch } from '../ui/ToggleSwitch';
 import { Trade, TradingSetup } from '../../types/trading';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
 import { MarketType, getSymbolsForMarket } from '../../utils/market';
+import { compressScreenshot } from '../../utils/imageUtils';
 import {
   LOT_SIZES,
   getLotSize,
@@ -184,15 +185,10 @@ const onSubmit = async (data: TradeFormData) => {
   try {
     let screenshotUrl: string | undefined = undefined;
 
-    // Convert screenshot to base64 data URL if present
+    // Convert and compress screenshot if present
     if (screenshotFile) {
       try {
-        screenshotUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(screenshotFile);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (error) => reject(error);
-        });
+        screenshotUrl = await compressScreenshot(screenshotFile);
       } catch (uploadError) {
         console.error('Screenshot processing error:', uploadError);
         toast.error('Failed to process screenshot');

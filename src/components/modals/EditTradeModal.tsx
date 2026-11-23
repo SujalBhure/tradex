@@ -10,6 +10,7 @@ import { CryptoSelect } from '../ui/CryptoSelect';
 import { Trade, TradingSetup } from '../../types/trading';
 import { CurrencyDisplay } from '../ui/CurrencyDisplay';
 import { MarketType, getSymbolsForMarket } from '../../utils/market';
+import { compressScreenshot } from '../../utils/imageUtils';
 import {
   LOT_SIZES,
   getLotSize,
@@ -198,12 +199,7 @@ export const EditTradeModal: React.FC<EditTradeModalProps> = ({
 
       if (screenshotFile) {
         try {
-          finalScreenshotUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(screenshotFile);
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = (error) => reject(error);
-          });
+          finalScreenshotUrl = await compressScreenshot(screenshotFile);
         } catch (uploadError) {
           console.error('Screenshot processing error:', uploadError);
           toast.error('Failed to process new screenshot.');

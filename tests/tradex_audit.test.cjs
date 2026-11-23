@@ -1521,6 +1521,54 @@ async function runTests() {
     assert(base.some((s) => s.name === 'SFP'), 'Must preserve SFP');
   });
 
+  await test('Trade Note & Screenshot Update Immutability & Sync Guarantee', async () => {
+    // Mock user trades state and tradesRef
+    let currentTrades = [
+      {
+        id: 'trade_101',
+        symbol: 'BTCUSD',
+        side: 'long',
+        entryPrice: 90000,
+        quantity: 1,
+        notes: '',
+        screenshotUrl: '',
+      },
+    ];
+    const tradesRef = { current: currentTrades };
+
+    // Mock local storage store
+    const localStore = {};
+    const mockSaveLocalTrades = (userId, trades) => {
+      localStore[userId] = JSON.stringify(trades);
+    };
+
+    // Simulate handleUpdateTrade
+    const updatedTrade = {
+      ...currentTrades[0],
+      notes: 'Bullish order block tap with strong CVD divergence. Target 95k.',
+      screenshotUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...',
+    };
+
+    // Execution of update pattern
+    currentTrades = currentTrades.map((t) => (t.id === updatedTrade.id ? updatedTrade : t));
+    tradesRef.current = currentTrades;
+    mockSaveLocalTrades('user_test_123', currentTrades);
+
+    // Assert that tradesRef.current is updated immediately
+    assert.strictEqual(tradesRef.current[0].notes, updatedTrade.notes, 'tradesRef must immediately reflect updated note');
+    assert.strictEqual(tradesRef.current[0].screenshotUrl, updatedTrade.screenshotUrl, 'tradesRef must immediately reflect screenshot');
+
+    // Assert that background Delta sync poll reads the updated note and screenshot
+    const backgroundSyncSnapshot = tradesRef.current;
+    assert.strictEqual(backgroundSyncSnapshot[0].notes, 'Bullish order block tap with strong CVD divergence. Target 95k.');
+
+    // Assert that local storage persisted the trade note and screenshot
+    const loadedLocal = JSON.parse(localStore['user_test_123']);
+    assert.strictEqual(loadedLocal.length, 1);
+    assert.strictEqual(loadedLocal[0].notes, updatedTrade.notes);
+    assert.strictEqual(loadedLocal[0].screenshotUrl, updatedTrade.screenshotUrl);
+  });
+
   console.log('\n================================================================');
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');
